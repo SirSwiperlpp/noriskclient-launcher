@@ -12,6 +12,7 @@ import type {
   DailyClaimState,
 } from '../types/afkpoints';
 import { useProfileStore } from '../store/profile-store';
+import { getStandardProfiles } from './profile-service';
 import { getBlockedModsConfig, getPackRolloutConfig, getPackFallbackConfig } from './flagsmith-service';
 import { refreshPermissions } from './permission-service';
 import { logInfo, logError } from '../utils/logging-utils';
@@ -105,13 +106,16 @@ export const refreshNrcDataOnMount = async (): Promise<void> => {
     }
 
     try {
-      const standardProfiles = await refreshStandardVersions();
-      console.log("Standard Versions updated successfully on mount!");
+      // Load standard (default) profiles from the local cache instead of
+      // re-fetching them from the API on every mount. This avoids the backend
+      // re-pulling and re-syncing the default profiles each launch.
+      const standardConfig = await getStandardProfiles();
+      console.log("Standard Versions loaded from local cache on mount!");
       // Store the standard profiles in the profile store
-      useProfileStore.setState({ standardProfiles });
+      useProfileStore.setState({ standardProfiles: standardConfig.profiles });
       standardVersionsSuccess = true;
     } catch (error) {
-      console.error("Failed to refresh Standard Versions on mount:", error);
+      console.error("Failed to load Standard Versions from local cache on mount:", error);
     }
 
     // Fetch profiles from the store after NRC data is refreshed
@@ -129,7 +133,7 @@ export const refreshNrcDataOnMount = async (): Promise<void> => {
       }
     }
   } catch (error) {
-    // Dieser Catch fängt Fehler von refreshNoriskPacks, refreshStandardVersions
+    // Dieser Catch fängt Fehler von refreshNoriskPacks, getStandardProfiles
     // oder wenn fetchProfiles selbst einen Fehler wirft, der nicht intern zu loading:false führt.
     console.error("Error during NRC data refresh or profile fetching process:", error);
     useProfileStore.setState({

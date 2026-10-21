@@ -252,9 +252,6 @@ interface ThemeState {
   // News section width
   newsSectionWidth: number;
   setNewsSectionWidth: (width: number) => void;
-  // Featured HugoSMP card on Play tab
-  featureMode: boolean;
-  setFeatureMode: (enabled: boolean) => void;
   // Language
   language: SupportedLanguage;
   setLanguage: (lang: SupportedLanguage) => void;
@@ -297,8 +294,6 @@ export const useThemeStore = create<ThemeState>()(
       modSource: ModPlatform.Modrinth,
       // News section width - defaults
       newsSectionWidth: 375,
-      // Featured HugoSMP card - defaults
-      featureMode: false,
       // Language - defaults
       language: "en" as SupportedLanguage,
       // Analytics consent state - defaults
@@ -509,11 +504,6 @@ export const useThemeStore = create<ThemeState>()(
         set({ newsSectionWidth: width });
       },
 
-      // Featured HugoSMP card
-      setFeatureMode: (enabled: boolean) => {
-        set({ featureMode: enabled });
-      },
-
       // Language
       setLanguage: (lang: SupportedLanguage) => {
         set({ language: lang });
@@ -578,13 +568,9 @@ export const useThemeStore = create<ThemeState>()(
             state.profilesTabVersionFilters = [];
           }
 
-          const legacyFeaturedLaunchMode = (state as { featuredLaunchMode?: string }).featuredLaunchMode;
-          if (legacyFeaturedLaunchMode === "hugo") {
-            state.featureMode = true;
-          } else if (legacyFeaturedLaunchMode) {
-            state.featureMode = false;
-          }
+          // Clean up removed featured-server (HugoSMP) launch-mode state from persisted data
           delete (state as { featuredLaunchMode?: string }).featuredLaunchMode;
+          delete (state as { featureMode?: boolean }).featureMode;
 
           // Ensure analytics consent state exists for existing users
           if (!state.analyticsConsent) {
