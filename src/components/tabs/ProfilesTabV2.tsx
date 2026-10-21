@@ -62,8 +62,10 @@ export function ProfilesTabV2() {
   // Local non-persistent state
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Use persistent values instead of local state
-  const activeGroup = profilesTabActiveGroup;
+  // Use persistent values instead of local state.
+  // Category group tabs were removed, so the list always shows all profiles
+  // regardless of any previously persisted group selection.
+  const activeGroup: string = "all";
   const sortBy = profilesTabSortBy;
   const selectedVersions = profilesTabVersionFilters;
   const layoutMode = profilesTabLayoutMode;
@@ -371,14 +373,6 @@ export function ProfilesTabV2() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-4 relative">
-      {/* Group Tabs */}
-      <GroupTabs
-        groups={groups}
-        activeGroup={activeGroup}
-        onGroupChange={setProfilesTabActiveGroup}
-        showAddButton={false}
-      />
-
       {/* Search & Filter Header */}
       <div className="mb-6 pb-4 border-b border-white/10">
         <div className="flex items-center gap-4">

@@ -70,6 +70,7 @@ import { ModrinthFilterSidebarV2 } from './ModrinthFilterSidebarV2'; // Import t
 import { ModrinthProjectCardV2 } from './ModrinthProjectCardV2'; // Import the new project card component
 import { ModrinthSearchControlsV2 } from './ModrinthSearchControlsV2'; // Import the new search controls component
 import { ModrinthQuickInstallProfilesModal } from './ModrinthQuickInstallProfilesModal'; // Import the new quick install profiles modal
+import { ModProfilePresetModal } from './ModProfilePresetModal';
 
 // Consolidate imports from content-service and types/content
 import {
@@ -238,6 +239,7 @@ export function ModrinthSearchV2({
   // State to track the currently opened install modal
   const [currentInstallProject, setCurrentInstallProject] = useState<UnifiedModSearchResult | any | null>(null);
   const [currentInstallVersion, setCurrentInstallVersion] = useState<UnifiedVersion | null>(null);
+  const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [installing, setInstalling] = useState<Record<string, boolean>>({});
   const [uninstalling, setUninstalling] = useState<Record<string, boolean>>({});
   const [installStatus, setInstallStatus] = useState<Record<string, boolean>>({});
@@ -3030,6 +3032,13 @@ export function ModrinthSearchV2({
           overrideDisplayContext={overrideDisplayContext} // Pass down
           modSource={modSource}
           onModSourceChange={setModSource}
+          onModProfileClick={() => setPresetModalOpen(true)}
+        />
+
+        <ModProfilePresetModal
+          open={presetModalOpen}
+          onClose={() => setPresetModalOpen(false)}
+          targetProfile={selectedProfile}
         />
 
         {/* Search Results Area (scrollable within the left content area) */}

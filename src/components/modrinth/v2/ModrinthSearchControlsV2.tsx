@@ -54,6 +54,8 @@ interface ModrinthSearchControlsV2Props {
   overrideDisplayContext?: "detail" | "standalone";
   modSource: ModPlatform;
   onModSourceChange: (source: ModPlatform) => void;
+  /** When provided, a third "Mod Profile" button is shown that opens the preset picker. */
+  onModProfileClick?: () => void;
 }
 
 export const ModrinthSearchControlsV2: React.FC<
@@ -86,6 +88,7 @@ export const ModrinthSearchControlsV2: React.FC<
   overrideDisplayContext,
   modSource,
   onModSourceChange,
+  onModProfileClick,
 }) => {
   const { t } = useTranslation();
   const globalDisplayContext = useDisplayContextStore((state) => state.context);
@@ -191,6 +194,20 @@ export const ModrinthSearchControlsV2: React.FC<
               />
               <span className="hidden sm:inline">CurseForge</span>
             </button>
+
+            {onModProfileClick && (
+              <button
+                onClick={onModProfileClick}
+                className={cn(
+                  "flex items-center gap-1.5 px-2 py-1 rounded-md font-smallcaps text-base transition-all duration-200 min-h-[2.5rem]",
+                  "bg-black/30 text-white/70 hover:text-white hover:bg-black/40 border border-transparent",
+                )}
+                title={t("modProfile.title")}
+              >
+                <Icon icon="solar:folder-with-files-bold" className="w-5 h-5" />
+                <span className="hidden sm:inline">{t("modProfile.button")}</span>
+              </button>
+            )}
           </div>
         </div>
 

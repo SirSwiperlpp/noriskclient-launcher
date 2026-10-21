@@ -9,6 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import type { Profile } from "../../../../types/profile";
 import { ModPlatform, type UnifiedVersion } from "../../../../types/unified";
+import { useModPresetsStore } from "../../../../store/useModPresetsStore";
+import { buildPresetItemsFromProfile } from "../../../../utils/mod-presets";
 import {
   type LocalContentItem,
   type LocalContentType,
@@ -127,6 +129,29 @@ export function LocalContentTabV3<T extends LocalContentItem>({
   const sync = useProfileSyncMods(profile, contentType === "Mod");
 
   const accentColor = useThemeStore((s) => s.accentColor);
+
+  // "Save as Mod Profile" preset support (shown on the Mods tab only).
+  const addPreset = useModPresetsStore((s) => s.addPreset);
+  const [savingPreset, setSavingPreset] = useState(false);
+
+  const handleSaveAsPreset = async () => {
+    if (savingPreset) return;
+    setSavingPreset(true);
+    try {
+      const items = await buildPresetItemsFromProfile(profile.id);
+      if (items.length === 0) {
+        toast.error(t("modProfile.savedEmpty"));
+        return;
+      }
+      const preset = addPreset(profile.name, items);
+      toast.success(t("modProfile.saved", { name: preset.name, count: items.length }));
+    } catch (e) {
+      console.error("[LocalContentTabV3] Failed to save preset:", e);
+      toast.error(t("modProfile.saveFailed"));
+    } finally {
+      setSavingPreset(false);
+    }
+  };
   const navigate = useNavigate();
   const { setActiveDropContext, registerRefreshCallback, unregisterRefreshCallback } = useAppDragDropStore();
 
@@ -442,6 +467,16 @@ export function LocalContentTabV3<T extends LocalContentItem>({
         void sync.reload();
       },
     },
+    ...(contentType === "Mod" ? [{
+      id: "save-preset",
+      label: t("modProfile.saveAction"),
+      icon: savingPreset ? "solar:refresh-bold" : "solar:bookmark-bold",
+      variant: "text" as const,
+      disabled: savingPreset,
+      loading: savingPreset,
+      tooltip: t("modProfile.saveActionTooltip"),
+      onClick: () => { void handleSaveAsPreset(); },
+    }] : []),
     ...(canBrowse ? [{
       id: "add",
       label: addContentButtonText,
