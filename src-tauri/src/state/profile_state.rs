@@ -3093,9 +3093,12 @@ impl ProfileManager {
             }
         }
 
-        let mut copies_created = 0;
         let mut copies_updated = 0;
 
+        // Auto-defaults disabled: we never create editable copies for standard
+        // profiles the user doesn't already have. Default profiles are not
+        // auto-created on startup, so deleting one keeps it gone. Existing copies
+        // are still kept in sync with forced fields from the standard definition.
         for standard_profile in standard_profiles {
             if let Some(existing_copy_id) = existing_copies_by_source_id.get(&standard_profile.id) {
                 // Update existing copy with forced fields
@@ -3111,20 +3114,14 @@ impl ProfileManager {
                     }
                 }
             } else {
-                // Create new copy
-                match self.create_editable_copy_from_standard(&standard_profile).await {
-                    Ok(new_id) => {
-                        info!("ProfileManager: Created editable copy {} for standard profile '{}'", new_id, standard_profile.name);
-                        copies_created += 1;
-                    }
-                    Err(e) => {
-                        warn!("ProfileManager: Failed to create copy for standard profile '{}': {}", standard_profile.name, e);
-                    }
-                }
+                trace!(
+                    "ProfileManager: Standard profile '{}' has no editable copy; skipping auto-creation (auto-defaults disabled).",
+                    standard_profile.name
+                );
             }
         }
 
-        info!("ProfileManager: Standard profile sync complete. Created {} new copies, updated {} existing copies", copies_created, copies_updated);
+        info!("ProfileManager: Standard profile sync complete. Updated {} existing copies (auto-creation disabled)", copies_updated);
         Ok(())
     }
 
@@ -3180,6 +3177,7 @@ impl ProfileManager {
     }
 
     /// Creates an editable copy of a standard profile for user customization
+    #[allow(dead_code)]
     async fn create_editable_copy_from_standard(&self, standard_profile: &Profile) -> Result<Uuid> {
         let mut editable_copy = standard_profile.clone();
            
