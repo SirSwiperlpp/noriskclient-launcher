@@ -165,6 +165,8 @@
   "common.vanilla": "Vanilla",
   "common.unknown": "Unbekannt",
   "launcher.select_version": "Version auswählen",
+  "launcher.pinned_profiles": "Gepinnte Profile",
+  "launcher.pinned_empty": "Pinne Profile im Profiles-Tab, um sie hier zu sehen.",
   "header.update.downloading": "Update wird heruntergeladen und installiert...",
   "header.update.success": "Update erfolgreich installiert! Anwendung wird neu gestartet.",
   "header.update.failed": "Update fehlgeschlagen: {{error}}",

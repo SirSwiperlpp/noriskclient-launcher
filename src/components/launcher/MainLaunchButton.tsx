@@ -3,7 +3,6 @@
 import type React from "react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { LaunchState } from "../../store/launch-state-store";
@@ -13,6 +12,8 @@ import { RolloutIndicator } from "./RolloutIndicator";
 
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
+import { usePinnedProfilesStore } from "../../store/usePinnedProfilesStore";
+import { loaderIconSrc } from "../../lib/loader-icons";
 import { useProfileLaunch } from "../../hooks/useProfileLaunch";
 
 interface Version {
@@ -49,7 +50,8 @@ export function MainLaunchButton({
   const [transientSuccessActive, setTransientSuccessActive] = useState(false);
 
   const { selectedVersion, setSelectedVersion } = useVersionSelectionStore();
-  const navigate = useNavigate();
+  const { pinnedProfileIds } = usePinnedProfilesStore();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   // Use the profile launch hook for launch logic
   const { handleLaunch: hookHandleLaunch, isLaunching, statusMessage, launchState } = useProfileLaunch({
@@ -118,13 +120,24 @@ export function MainLaunchButton({
     }
   };
 
-  const handleOpenModal = (e: React.MouseEvent) => {
+  const handleToggleDropdown = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isButtonLaunching) return;
-
-    // Navigate to profiles tab instead of opening modal
-    navigate("/profiles");
+    setIsDropdownOpen((open) => !open);
   };
+
+  const handleSelectPinned = (versionId: string) => {
+    setSelectedVersion(versionId);
+    if (onVersionChange) {
+      onVersionChange(versionId);
+    }
+    setIsDropdownOpen(false);
+  };
+
+  // Pinned profiles (from the local pin store), in pin order, that still exist.
+  const pinnedVersions = pinnedProfileIds
+    .map((id) => versions?.find((v) => v.id === id))
+    .filter((v): v is Version => Boolean(v));
 
   const getMainButtonIcon = () => {
     if (isButtonLaunching) {
@@ -209,7 +222,7 @@ export function MainLaunchButton({
           </Button>
 
           <IconButton
-            onClick={handleOpenModal}
+            onClick={handleToggleDropdown}
             disabled={isButtonLaunching || !versions || versions.length === 0}
             size="xl"
             className={cn("rounded-l-none border-l-0", mainButtonHeight)}
@@ -220,6 +233,7 @@ export function MainLaunchButton({
               getButtonVariant() === "destructive" ? "destructive" : "3d"
             }
             aria-label={t('launcher.select_version')}
+            aria-expanded={isDropdownOpen}
           />
 
           <div className="absolute -top-2 -left-2 w-7 h-7 z-10 pointer-events-auto">
@@ -227,6 +241,58 @@ export function MainLaunchButton({
           </div>
         </div>
       </div>
+
+      {isDropdownOpen && (
+        <>
+          {/* Click-outside backdrop */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setIsDropdownOpen(false)}
+          />
+          <div className="absolute bottom-full right-0 mb-2 z-50 w-64 max-h-80 overflow-y-auto rounded-lg border border-white/15 bg-black/90 backdrop-blur-md shadow-xl p-1">
+            <div className="px-3 py-2 text-xs uppercase tracking-wide text-white/50 font-minecraft">
+              {t('launcher.pinned_profiles')}
+            </div>
+            {pinnedVersions.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-white/60">
+                {t('launcher.pinned_empty')}
+              </div>
+            ) : (
+              pinnedVersions.map((v) => {
+                const isSelected = v.id === selectedVersion;
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => handleSelectPinned(v.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors",
+                      isSelected
+                        ? "bg-white/15 text-white"
+                        : "text-white/80 hover:bg-white/10"
+                    )}
+                  >
+                    <img
+                      src={loaderIconSrc(v.icon)}
+                      alt=""
+                      className="w-5 h-5 shrink-0"
+                      style={{ imageRendering: "pixelated" }}
+                    />
+                    <span className="flex-1 truncate">{v.label}</span>
+                    {isSelected && (
+                      <Icon
+                        icon="solar:check-circle-bold"
+                        width="18"
+                        height="18"
+                        className="shrink-0"
+                      />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

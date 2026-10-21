@@ -165,6 +165,8 @@
   "common.vanilla": "Vanilla",
   "common.unknown": "Unknown",
   "launcher.select_version": "Select version",
+  "launcher.pinned_profiles": "Pinned profiles",
+  "launcher.pinned_empty": "Pin profiles in the Profiles tab to see them here.",
   "header.update.downloading": "Downloading and installing update...",
   "header.update.success": "Update installed successfully! Application will restart.",
   "header.update.failed": "Update failed: {{error}}",
