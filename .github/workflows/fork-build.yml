@@ -72,15 +72,21 @@ jobs:
         if: matrix.platform == 'macos-latest'
         run: node scripts/stage-native-deps.mjs --target ${{ matrix.target }}
 
+      # Personal installers don't need the Tauri updater signature, so disable it
+      # for the CI build. This removes the need for a TAURI_SIGNING_PRIVATE_KEY
+      # secret (the project sets createUpdaterArtifacts: true, which otherwise
+      # fails the build when no key is present).
+      - name: Disable updater artifacts for the CI build
+        shell: bash
+        run: |
+          node -e "const f='src-tauri/tauri.conf.json';const fs=require('fs');const c=JSON.parse(fs.readFileSync(f,'utf8'));c.bundle=c.bundle||{};c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(c,null,2));console.log('createUpdaterArtifacts disabled for CI');"
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           RUSTFLAGS: ${{ matrix.platform == 'ubuntu-22.04' && '-C link-arg=-Wl,--no-as-needed -C link-arg=-layatana-appindicator3 -C link-arg=-Wl,--as-needed' || '' }}
         with:
           args: ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
-          packageManager: yarn
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
