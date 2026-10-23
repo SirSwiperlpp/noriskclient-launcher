@@ -217,6 +217,9 @@ interface ThemeState {
   isBackgroundAnimationEnabled: boolean;
   showNavLabels: boolean;
   toggleNavLabels: () => void;
+  // Realityrift ad on the Play tab (clickable Realityrift.de text above the launch button)
+  hideRealityriftAd: boolean;
+  toggleHideRealityriftAd: () => void;
   isDetailViewSidebarOnLeft: boolean;
   toggleDetailViewSidebarPosition: () => void;
   profileGroupingCriterion: string;
@@ -275,6 +278,7 @@ export const useThemeStore = create<ThemeState>()(
       accentColor: ACCENT_COLORS.blue,
       isBackgroundAnimationEnabled: false,
       showNavLabels: true,
+      hideRealityriftAd: true,
       isDetailViewSidebarOnLeft: true,
       profileGroupingCriterion: "group",
       staticBackground: true,
@@ -374,6 +378,10 @@ export const useThemeStore = create<ThemeState>()(
 
       toggleNavLabels: () => {
         set((state) => ({ showNavLabels: !state.showNavLabels }));
+      },
+
+      toggleHideRealityriftAd: () => {
+        set((state) => ({ hideRealityriftAd: !state.hideRealityriftAd }));
       },
 
       toggleDetailViewSidebarPosition: () => {
@@ -571,6 +579,15 @@ export const useThemeStore = create<ThemeState>()(
           // Clean up removed featured-server (HugoSMP) launch-mode state from persisted data
           delete (state as { featuredLaunchMode?: string }).featuredLaunchMode;
           delete (state as { featureMode?: boolean }).featureMode;
+
+          // One-time migration: the Realityrift ad defaults to hidden. Apply this
+          // default once to existing persisted state too; afterwards the toggle
+          // value persists normally.
+          const realityriftMig = state as { realityriftAdDefaultApplied?: boolean };
+          if (!realityriftMig.realityriftAdDefaultApplied) {
+            state.hideRealityriftAd = true;
+            realityriftMig.realityriftAdDefaultApplied = true;
+          }
 
           // Ensure analytics consent state exists for existing users
           if (!state.analyticsConsent) {

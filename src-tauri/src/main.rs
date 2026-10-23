@@ -208,6 +208,17 @@ async fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        // Remember the window size (and maximized state) across restarts, so the
+        // launcher reopens at the scale it was closed at. Position is left to the
+        // window config (centered); only the size/maximized flags are persisted.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
         .setup(|app| {
             let app_handle = app.handle().clone();
 

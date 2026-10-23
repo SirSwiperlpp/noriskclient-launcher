@@ -21,7 +21,7 @@ export function AppearanceTab() {
   const { t } = useTranslation();
   const kw = useSettingsKeywords();
   const { saving } = useSettingsConfig();
-  const { staticBackground, toggleStaticBackground, toggleBackgroundAnimation, showNavLabels, toggleNavLabels } =
+  const { staticBackground, toggleStaticBackground, toggleBackgroundAnimation, showNavLabels, toggleNavLabels, hideRealityriftAd, toggleHideRealityriftAd } =
     useThemeStore();
   const { 
     currentEffect, setCurrentEffect, 
@@ -99,6 +99,9 @@ export function AppearanceTab() {
         </SettingRow>
         <SettingRow label={t("settings.nav_labels")} description={t("settings.nav_labels.tooltip")} searchKeywords={kw("settings.nav_labels", "sidebar", "labels", "text", "beschriftung", "navigation", "nav", "icons")}>
           <ToggleSwitch checked={showNavLabels} onChange={toggleNavLabels} size="md" />
+        </SettingRow>
+        <SettingRow label={t("settings.realityrift_ad.hide")} searchKeywords={kw("settings.realityrift_ad.hide", "realityrift", "ad", "werbung", "ads", "promo", "hide", "ausblenden")} disabled={saving}>
+          <ToggleSwitch checked={hideRealityriftAd} onChange={toggleHideRealityriftAd} disabled={saving} size="md" />
         </SettingRow>
         <SettingRow label={t("settings.background.snow")} searchKeywords={kw("settings.background.snow", "snow", "schnee", "winter")} disabled={saving}>
           <SnowEffectToggle showLabel={false} size="md" disabled={saving} />

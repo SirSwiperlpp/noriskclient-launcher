@@ -215,7 +215,13 @@ export function App() {
                   "[App.tsx] Global MinecraftProcessExited event:",
                   exitPayload,
               );
-              if (!exitPayload.success) {
+              // Exit codes that should NOT trigger the crash reporter (no toast, no dialog).
+              const crashDialogExcludedExitCodes = [-8];
+              const exitCodeExcluded =
+                exitPayload.exit_code != null &&
+                crashDialogExcludedExitCodes.includes(exitPayload.exit_code);
+
+              if (!exitPayload.success && !exitCodeExcluded) {
                 const crashMsg = `Minecraft crashed (Exit Code: ${exitPayload.exit_code ?? "N/A"}). See crash report for details.`;
                 toast.error(crashMsg, { duration: 10000 });
                 openCrashModal(exitPayload);

@@ -199,7 +199,7 @@ export const ModrinthSearchControlsV2: React.FC<
               <button
                 onClick={onModProfileClick}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 rounded-md font-smallcaps text-base transition-all duration-200 min-h-[2.5rem]",
+                  "flex items-center gap-1.5 px-2 py-1 rounded-md font-smallcaps text-base transition-all duration-200 min-h-[2.5rem] whitespace-nowrap",
                   "bg-black/30 text-white/70 hover:text-white hover:bg-black/40 border border-transparent",
                 )}
                 title={t("modProfile.title")}
