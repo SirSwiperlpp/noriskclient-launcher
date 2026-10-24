@@ -6,12 +6,16 @@ name: Fork Build (macOS, Linux & Windows)
 # It also disables the Tauri updater signature for the build, so no signing
 # secret is required.
 #
-# Run it manually from the Actions tab ("Run workflow"). The installers are
+# Runs on every push to the `v3` branch, and can also be started manually from
+# the Actions tab ("Run workflow"). The installers are
 # uploaded as build artifacts on the run: .dmg (macOS), .AppImage/.deb (Linux)
 # and the NSIS setup .exe (Windows). The AppImage runs on any Linux distro,
 # including CachyOS.
 
 on:
+  push:
+    branches:
+      - v3
   workflow_dispatch: {}
 
 jobs:
