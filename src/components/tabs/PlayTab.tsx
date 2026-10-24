@@ -120,6 +120,7 @@ export function PlayTab() {
             }
             onLaunchVersionChange={handleVersionChange}
             launchButtonVersions={versions}
+            isLoading={loading}
             className=""
             outline={outline}
           />
