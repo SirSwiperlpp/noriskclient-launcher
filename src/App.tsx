@@ -216,7 +216,9 @@ export function App() {
                   exitPayload,
               );
               // Exit codes that should NOT trigger the crash reporter (no toast, no dialog).
-              const crashDialogExcludedExitCodes = [-8];
+              // 248 is the unsigned 8-bit form of -8 (256 - 8); Linux surfaces the
+              // same exit as 248, so both are excluded.
+              const crashDialogExcludedExitCodes = [-8, 248];
               const exitCodeExcluded =
                 exitPayload.exit_code != null &&
                 crashDialogExcludedExitCodes.includes(exitPayload.exit_code);
