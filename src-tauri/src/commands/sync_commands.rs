@@ -64,6 +64,40 @@ pub async fn sync_now() -> Result<()> {
 }
 
 #[command]
+pub async fn sync_pull_all() -> Result<()> {
+    let manager = manager()?;
+    let state = crate::state::State::get().await?;
+    let config = state.config_manager.get_config().await;
+
+    if !config.sync_enabled {
+        return Err(CommandError::from(AppError::Other(
+            "Cloud sync is disabled".to_string(),
+        )));
+    }
+    if config
+        .sync_api_url
+        .as_deref()
+        .map(|url| url.trim().is_empty())
+        .unwrap_or(true)
+    {
+        return Err(CommandError::from(AppError::Other(
+            "Set the sync API URL first".to_string(),
+        )));
+    }
+    if manager.is_running() {
+        return Ok(());
+    }
+    if !manager.processes_idle().await {
+        return Err(CommandError::from(AppError::Other(
+            "Close all running instances before syncing".to_string(),
+        )));
+    }
+
+    manager.trigger_pull_all();
+    Ok(())
+}
+
+#[command]
 pub async fn sync_test_connection(
     url: String,
     api_key: Option<String>,

@@ -1007,6 +1007,7 @@ async fn main() {
             commands::sync_commands::sync_is_running,
             commands::sync_commands::sync_refresh,
             commands::sync_commands::sync_now,
+            commands::sync_commands::sync_pull_all,
             commands::sync_commands::sync_test_connection,
             commands::sync_commands::sync_list_world_backups,
             commands::sync_commands::sync_restore_world_backup,

@@ -32,6 +32,12 @@ pub enum SyncDirection {
     Down,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncMode {
+    Bidirectional,
+    PullAll,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncFileActivity {
     pub profile_id: String,
@@ -305,14 +311,22 @@ impl CloudSyncManager {
     }
 
     pub fn trigger(self: &Arc<Self>, reason: &str) {
+        self.spawn_sync(reason, SyncMode::Bidirectional);
+    }
+
+    pub fn trigger_pull_all(self: &Arc<Self>) {
+        self.spawn_sync("pull_all", SyncMode::PullAll);
+    }
+
+    fn spawn_sync(self: &Arc<Self>, reason: &str, mode: SyncMode) {
         let manager = self.clone();
         let reason = reason.to_string();
         tauri::async_runtime::spawn(async move {
-            manager.run_guarded(&reason).await;
+            manager.run_guarded(&reason, mode).await;
         });
     }
 
-    async fn run_guarded(self: &Arc<Self>, reason: &str) {
+    async fn run_guarded(self: &Arc<Self>, reason: &str, mode: SyncMode) {
         let (enabled, url, key) = match self.config().await {
             Some(values) => values,
             None => return,
@@ -336,7 +350,7 @@ impl CloudSyncManager {
         let last = self.status.lock().await.last_synced_ms;
         self.emit_running(&SyncReport::default(), None).await;
 
-        let result = engine::run(self.clone(), &url, key).await;
+        let result = engine::run(self.clone(), &url, key, mode).await;
         self.running.store(false, Ordering::SeqCst);
 
         match result {

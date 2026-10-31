@@ -53,6 +53,10 @@ export async function syncNow(): Promise<void> {
   await invoke("sync_now");
 }
 
+export async function pullAllProfiles(): Promise<void> {
+  await invoke("sync_pull_all");
+}
+
 export async function refreshSync(): Promise<SyncStatus> {
   return invoke<SyncStatus>("sync_refresh");
 }

@@ -13,16 +13,19 @@ import {
   testSyncConnection,
   refreshSync,
   syncNow,
+  pullAllProfiles,
   type SyncConnectionResult,
 } from "../../../services/sync-service";
 import { useSyncStore } from "../../../store/sync-store";
 import { parseErrorMessage } from "../../../utils/error-utils";
+import { useConfirmDialog } from "../../../hooks/useConfirmDialog";
 
 export function SyncTab() {
   const { t } = useTranslation();
   const kw = useSettingsKeywords();
   const { config, tempConfig, setTempConfig, saving } = useSettingsConfig();
   const status = useSyncStore((s) => s.status);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<SyncConnectionResult | null>(null);
@@ -72,6 +75,23 @@ export function SyncTab() {
     try {
       await syncNow();
       toast.success(t("settings.sync.sync_started"));
+    } catch (err) {
+      toast.error(parseErrorMessage(err));
+    }
+  };
+
+  const handlePullAll = async () => {
+    const confirmed = await confirm({
+      title: t("settings.sync.pull_all.button"),
+      message: t("settings.sync.pull_all.confirm"),
+      confirmText: t("settings.sync.pull_all.button"),
+      cancelText: t("common.cancel"),
+      type: "warning",
+    });
+    if (!confirmed) return;
+    try {
+      await pullAllProfiles();
+      toast.success(t("settings.sync.pull_all.started"));
     } catch (err) {
       toast.error(parseErrorMessage(err));
     }
@@ -209,6 +229,18 @@ export function SyncTab() {
               </div>
             </div>
 
+            <div className="pt-1">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handlePullAll}
+                disabled={status.running || saving || !savedEnabled}
+                icon={<Icon icon="solar:cloud-download-bold" className="w-5 h-5" />}
+              >
+                {t("settings.sync.pull_all.button")}
+              </Button>
+            </div>
+
             {status.storage_full && (
               <div className="p-4 rounded-lg border border-orange-500/30 bg-orange-900/20">
                 <div className="flex items-start gap-3">
@@ -222,6 +254,8 @@ export function SyncTab() {
           </div>
         </SettingsSection>
       )}
+
+      {confirmDialog}
     </div>
   );
 }

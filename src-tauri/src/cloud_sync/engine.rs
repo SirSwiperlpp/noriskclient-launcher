@@ -1,5 +1,7 @@
 use super::client::{RemoteEntry, RemoteWorldBackup, SyncClient, WriteResult};
-use super::{now_ms, CloudSyncManager, SyncDirection, SyncFailure, SyncFileActivity, SyncReport};
+use super::{
+    now_ms, CloudSyncManager, SyncDirection, SyncFailure, SyncFileActivity, SyncMode, SyncReport,
+};
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
@@ -286,6 +288,28 @@ fn diff(local: &HashMap<String, LocalEntry>, remote: &HashMap<String, RemoteEntr
     items
 }
 
+fn pull_all_items(
+    local: &HashMap<String, LocalEntry>,
+    remote: &HashMap<String, RemoteEntry>,
+) -> Vec<PlanItem> {
+    let mut items = Vec::new();
+    for (rel, entry) in remote {
+        if !is_safe_rel(rel) {
+            continue;
+        }
+        let same = local.get(rel).map(|l| l.hash == entry.hash).unwrap_or(false);
+        if same {
+            continue;
+        }
+        items.push(PlanItem {
+            rel: rel.clone(),
+            direction: SyncDirection::Down,
+        });
+    }
+    items.sort_by(|a, b| a.rel.cmp(&b.rel));
+    items
+}
+
 async fn write_atomic(abs: &Path, bytes: &[u8]) -> Result<()> {
     let parent = abs
         .parent()
@@ -504,6 +528,7 @@ pub async fn run(
     manager: Arc<CloudSyncManager>,
     url: &str,
     key: Option<String>,
+    mode: SyncMode,
 ) -> std::result::Result<SyncReport, SyncFailure> {
     super::clear_cancelled_profiles();
     let client = Arc::new(SyncClient::new(url, key)?);
@@ -534,7 +559,10 @@ pub async fn run(
         manager.emit_scanning(&profile.name).await;
         let local = build_local_manifest(profile.id, &instance_dir).await?;
         let remote = client.get_manifest(&profile.id.to_string()).await?;
-        let items = diff(&local, &remote);
+        let items = match mode {
+            SyncMode::Bidirectional => diff(&local, &remote),
+            SyncMode::PullAll => pull_all_items(&local, &remote),
+        };
         total += items.len() as u64;
         plans.push(ProfilePlan {
             id: profile.id,
