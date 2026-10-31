@@ -183,6 +183,10 @@ async fn main() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -274,6 +278,12 @@ async fn main() {
             }
 
             crate::cloud_sync::CloudSyncManager::init(std::sync::Arc::new(app_handle.clone()));
+
+            if std::env::args().any(|arg| arg == "--autostart") {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
 
             // --- Initialize System Tray (Tauri 2.0) ---
             let show_item = MenuItem::with_id(app, "show", "Show NoRisk Launcher", true, None::<&str>)?;
@@ -1000,6 +1010,8 @@ async fn main() {
             commands::sync_commands::sync_test_connection,
             commands::sync_commands::sync_list_world_backups,
             commands::sync_commands::sync_restore_world_backup,
+            commands::autostart_command::set_autostart,
+            commands::autostart_command::is_autostart_enabled,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

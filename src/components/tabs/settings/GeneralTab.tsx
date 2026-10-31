@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
+import { toast } from "react-hot-toast";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../../lib/utils";
 import { Select } from "../../ui/Select";
@@ -19,6 +21,7 @@ import { invalidateAnalyticsCache } from "../../../services/analytics-service";
 import { LANGUAGE_OPTIONS, type SupportedLanguage } from "../../../i18n";
 import { useSettingsConfig, useSettingsKeywords } from "./settings-context";
 import { isWindows } from "../../../utils/platform";
+import { isAutostartEnabled, setAutostart } from "../../../services/autostart-service";
 
 export function GeneralTab() {
   const { t } = useTranslation();
@@ -34,6 +37,30 @@ export function GeneralTab() {
     usePermission(PERMISSION.EXPERIMENTAL_MODE) ||
     !!tempConfig?.is_experimental ||
     !!config?.is_experimental;
+
+  const [autostartOn, setAutostartOn] = useState(false);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isWindows()) return;
+    isAutostartEnabled()
+      .then(setAutostartOn)
+      .catch(() => setAutostartOn(false));
+  }, []);
+
+  const handleAutostartChange = async (checked: boolean) => {
+    setAutostartBusy(true);
+    setAutostartOn(checked);
+    try {
+      await setAutostart(checked);
+    } catch (err) {
+      setAutostartOn(!checked);
+      toast.error(t("settings.auto_start.failed"));
+      console.error("[GeneralTab] Failed to set autostart:", err);
+    } finally {
+      setAutostartBusy(false);
+    }
+  };
 
   const handleConcurrentDownloadsChange = (value: number) => {
     if (tempConfig) setTempConfig({ ...tempConfig, concurrent_downloads: value });
@@ -249,6 +276,21 @@ export function GeneralTab() {
             size="md"
           />
         </SettingRow>
+        {isWindows() && (
+          <SettingRow
+            label={t("settings.auto_start")}
+            description={t("settings.auto_start.tooltip")}
+            searchKeywords={kw("settings.auto_start", "autostart", "startup", "boot", "windows", "start", "tray")}
+            disabled={autostartBusy}
+          >
+            <ToggleSwitch
+              checked={autostartOn}
+              onChange={handleAutostartChange}
+              disabled={autostartBusy}
+              size="md"
+            />
+          </SettingRow>
+        )}
         <SettingRow
           label={t("analytics.settings.label")}
           description={t("analytics.settings.tooltip")}

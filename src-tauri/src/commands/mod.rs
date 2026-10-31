@@ -1,5 +1,6 @@
 pub mod applixir_command;
 pub mod assets_command;
+pub mod autostart_command;
 pub mod deep_link_handler;
 pub mod support_command;
 pub mod cape_command;
