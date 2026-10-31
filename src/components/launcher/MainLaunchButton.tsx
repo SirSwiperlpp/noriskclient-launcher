@@ -13,8 +13,10 @@ import { RolloutIndicator } from "./RolloutIndicator";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
 import { usePinnedProfilesStore } from "../../store/usePinnedProfilesStore";
+import { useProfileStore } from "../../store/profile-store";
 import { loaderIconSrc } from "../../lib/loader-icons";
 import { useProfileLaunch } from "../../hooks/useProfileLaunch";
+import { ProfileIcon } from "../profiles/ProfileIcon";
 
 interface Version {
   id: string;
@@ -22,6 +24,43 @@ interface Version {
   icon?: string;
   isCustom?: boolean;
   profileId?: string;
+}
+
+// Icon for a pinned profile in the dropdown: shows the profile's custom icon
+// (the one set in the launcher) when it has one, otherwise falls back to the
+// mod-loader icon.
+function PinnedProfileIcon({ version }: { version: Version }) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const profile = useProfileStore((state) =>
+    state.profiles.find((p) => p.id === (version.profileId ?? version.id)),
+  );
+
+  if (profile?.banner?.source) {
+    return (
+      <div className="w-5 h-5 shrink-0 rounded-sm overflow-hidden">
+        <ProfileIcon
+          profileId={profile.id}
+          banner={profile.banner}
+          profileName={profile.name}
+          accentColor={accentColor.value}
+          onSuccessfulUpdate={() => {}}
+          isEditable={false}
+          variant="bare"
+          className="w-full h-full"
+          iconClassName="w-5 h-5"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={loaderIconSrc(version.icon)}
+      alt=""
+      className="w-5 h-5 shrink-0"
+      style={{ imageRendering: "pixelated" }}
+    />
+  );
 }
 
 interface MainLaunchButtonProps {
@@ -271,12 +310,7 @@ export function MainLaunchButton({
                         : "text-white/80 hover:bg-white/10"
                     )}
                   >
-                    <img
-                      src={loaderIconSrc(v.icon)}
-                      alt=""
-                      className="w-5 h-5 shrink-0"
-                      style={{ imageRendering: "pixelated" }}
-                    />
+                    <PinnedProfileIcon version={v} />
                     <span className="flex-1 truncate">{v.label}</span>
                     {isSelected && (
                       <Icon
