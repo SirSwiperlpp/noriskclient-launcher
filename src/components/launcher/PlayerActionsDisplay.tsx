@@ -16,6 +16,8 @@ import type { PromoOutlineConfig } from '@noriskclient/nrc-skin-renderer/postfx'
 // banner (MOTD + icon) which launches and connects to the Realityrift server.
 const REALITYRIFT_SERVER = 'realityrift.de';
 const REALITYRIFT_NAME = 'Realityrift.de';
+// Temporarily disabled; flip to true to re-enable the Realityrift server card.
+const REALITYRIFT_ENABLED = false;
 
 interface PlayerActionsDisplayProps {
   playerName: string | null | undefined;
@@ -66,7 +68,7 @@ export function PlayerActionsDisplay({
   const selectedVersionLabel = launchButtonVersions.find(v => v.id === launchButtonDefaultVersion)?.label;
 
   // The banner is only ever shown when the ad is enabled.
-  const cardVisible = showServerCard && !hideRealityriftAd;
+  const cardVisible = REALITYRIFT_ENABLED && showServerCard && !hideRealityriftAd;
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
@@ -93,7 +95,7 @@ export function PlayerActionsDisplay({
           hasProfiles ? (
             <>
               {/* Realityrift ad toggle: text above the launch button */}
-              {!hideRealityriftAd && (
+              {REALITYRIFT_ENABLED && !hideRealityriftAd && (
                 <div
                   className={`absolute left-0 right-0 flex justify-center px-4 z-30 transition-all duration-300 ${cardVisible ? 'bottom-32' : 'bottom-24'}`}
                 >
