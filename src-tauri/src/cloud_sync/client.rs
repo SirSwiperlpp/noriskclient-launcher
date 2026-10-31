@@ -2,6 +2,9 @@ use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
+use uuid::Uuid;
+
+const CHUNK_SIZE: usize = 10 * 1024 * 1024;
 
 pub struct SyncClient {
     base: String,
@@ -152,6 +155,11 @@ impl SyncClient {
         mtime_ms: i64,
         hash: &str,
     ) -> Result<WriteResult> {
+        if bytes.len() > CHUNK_SIZE {
+            return self
+                .upload_chunked(profile_id, rel, bytes, mtime_ms, hash)
+                .await;
+        }
         let url = format!("{}/profiles/{}/file", self.base, profile_id);
         let resp = self
             .auth(
@@ -174,6 +182,54 @@ impl SyncClient {
                 rel,
                 resp.status()
             )));
+        }
+        Ok(WriteResult::Written)
+    }
+
+    async fn upload_chunked(
+        &self,
+        profile_id: &str,
+        rel: &str,
+        bytes: Vec<u8>,
+        mtime_ms: i64,
+        hash: &str,
+    ) -> Result<WriteResult> {
+        let upload_id = Uuid::new_v4().to_string();
+        let total = bytes.len();
+        let mut offset = 0usize;
+        while offset < total {
+            let end = std::cmp::min(offset + CHUNK_SIZE, total);
+            let is_last = end == total;
+            let chunk = bytes[offset..end].to_vec();
+            let url = format!("{}/profiles/{}/filechunk", self.base, profile_id);
+            let mut builder = self
+                .http
+                .put(url)
+                .query(&[("path", rel)])
+                .header("x-upload-id", upload_id.as_str())
+                .header("x-offset", offset.to_string())
+                .header("content-type", "application/octet-stream")
+                .body(chunk);
+            if is_last {
+                builder = builder
+                    .header("x-last", "1")
+                    .header("x-total-size", total.to_string())
+                    .header("x-sha256", hash)
+                    .header("x-mtime-ms", mtime_ms.to_string());
+            }
+            let resp = self.auth(builder).send().await?;
+            if resp.status().as_u16() == 507 {
+                return Ok(WriteResult::StorageFull);
+            }
+            if !resp.status().is_success() {
+                return Err(AppError::Other(format!(
+                    "Chunk upload failed for {} at offset {}: {}",
+                    rel,
+                    offset,
+                    resp.status()
+                )));
+            }
+            offset = end;
         }
         Ok(WriteResult::Written)
     }
