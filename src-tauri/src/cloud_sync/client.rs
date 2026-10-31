@@ -58,7 +58,7 @@ pub struct RemoteWorldBackup {
     pub id: String,
     #[serde(default)]
     pub size: u64,
-    #[serde(default)]
+    #[serde(default, alias = "createdAt")]
     pub created_at: i64,
 }
 

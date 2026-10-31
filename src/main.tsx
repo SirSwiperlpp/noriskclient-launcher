@@ -9,6 +9,13 @@ import { ClipOverlay } from "./components/overlay/ClipOverlay";
 import i18n from "./i18n/i18n";
 import "./styles/globals.css";
 
+document.addEventListener("contextmenu", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('input, textarea, [contenteditable="true"]')) {
+    event.preventDefault();
+  }
+});
+
 const isOverlay = (() => {
   try {
     return getCurrentWindow().label === "clip-overlay";
