@@ -21,6 +21,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-show",
+    "core:window:allow-hide",
     "core:window:allow-unminimize",
     "core:window:allow-set-focus",
     "dialog:default",

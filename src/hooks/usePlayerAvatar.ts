@@ -56,7 +56,7 @@ export function usePlayerAvatar({
     return () => {
       cancelled = true;
     };
-  }, [uuid, size, overlay, isSelf, isSelf ? skinRevision : 0]);
+  }, [uuid, size, overlay, isSelf, skinRevision]);
 
   return avatarUrl;
 }

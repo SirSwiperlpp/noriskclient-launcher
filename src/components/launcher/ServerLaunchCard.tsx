@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
@@ -31,6 +31,20 @@ export function ServerLaunchCard({
   const { t } = useTranslation();
   const [ping, setPing] = useState<ServerPingInfo | null>(null);
   const [pingState, setPingState] = useState<"pending" | "ok" | "error">("pending");
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setIsNarrow(entry.contentRect.width < 280);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const { handleQuickPlayLaunch, isLaunching } = useProfileLaunch({
     profileId: profileId ?? "",
@@ -63,6 +77,9 @@ export function ServerLaunchCard({
 
   const iconBase64 = ping?.favicon_base64 ?? null;
   const motdInput = ping?.description_json ?? ping?.description ?? "";
+  const motdPlain = (ping?.description ?? "").replace(/§./g, "").trim();
+  const showMotd =
+    !isNarrow && motdPlain.length > 0 && motdPlain.toLowerCase() !== "a minecraft server";
 
   const handleClick = () => {
     if (!profileId) {
@@ -75,6 +92,7 @@ export function ServerLaunchCard({
 
   return (
     <button
+      ref={cardRef}
       onClick={handleClick}
       disabled={!profileId}
       className={cn(
@@ -109,7 +127,7 @@ export function ServerLaunchCard({
             <Icon icon="svg-spinners:ring-resize" className="w-3 h-3" />
             {t("profiles.v3.servers.pinging")}
           </div>
-        ) : motdInput ? (
+        ) : showMotd ? (
           <div
             className="mt-1 text-xs font-minecraft whitespace-pre-line line-clamp-2 leading-snug"
             dangerouslySetInnerHTML={{ __html: parseMotdToHtml(motdInput) }}

@@ -896,28 +896,17 @@ pub async fn get_face_avatar(
             .map_err(|e| AppError::Other(format!("Failed to create face cache dir: {}", e)))?;
     }
 
-    let active_id = state
-        .minecraft_account_manager_v2
-        .get_active_account()
-        .await
-        .ok()
-        .flatten()
-        .map(|a| normalize_uuid(&a.id.to_string()));
-    let is_self = active_id.as_deref() == Some(norm.as_str());
-
-    if is_self {
-        if let Some(active) = state.active_skin_manager.get(&norm).await {
-            let hash = calculate_sha1_from_bytes(active.base64_data.as_bytes());
-            let short_hash = &hash[0..std::cmp::min(8, hash.len())];
-            let path = cache_dir.join(format!(
-                "{}_{}_{}_{}.png",
-                norm, short_hash, out_size, overlay
-            ));
-            if !path.exists() {
-                write_face_avatar(&path, &active.base64_data, overlay, out_size)?;
-            }
-            return Ok(path);
+    if let Some(active) = state.active_skin_manager.get(&norm).await {
+        let hash = calculate_sha1_from_bytes(active.base64_data.as_bytes());
+        let short_hash = &hash[0..std::cmp::min(8, hash.len())];
+        let path = cache_dir.join(format!(
+            "{}_{}_{}_{}.png",
+            norm, short_hash, out_size, overlay
+        ));
+        if !path.exists() {
+            write_face_avatar(&path, &active.base64_data, overlay, out_size)?;
         }
+        return Ok(path);
     }
 
     let path = cache_dir.join(format!("{}_{}_{}.png", norm, out_size, overlay));
