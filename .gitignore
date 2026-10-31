@@ -36,3 +36,4 @@ vite.config.ts.timestamp-*
 .idea
 examples
 /src-tauri/gen
+sync-server

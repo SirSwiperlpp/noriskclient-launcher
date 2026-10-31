@@ -31,6 +31,8 @@ import { formatRelativeTime } from "../../../../utils/format-relative-time";
 import { Tooltip } from "../../../ui/Tooltip";
 import { ConfirmDeleteDialog } from "../../../modals/ConfirmDeleteDialog";
 import { CopyWorldDialog } from "../../../modals/CopyWorldDialog";
+import { RestoreWorldsModal } from "../../../modals/RestoreWorldsModal";
+import { useSyncStore } from "../../../../store/sync-store";
 import { ThemedDropdown, ThemedDropdownItem } from "../shared/ThemedDropdown";
 import { EmptyStateV3 } from "../shared/EmptyStateV3";
 import { FloatingActionBar, type FABActionConfig } from "../shared/FloatingActionBar";
@@ -67,6 +69,7 @@ export function WorldsTabV3({ profile, isActive = true, onRefresh, onLaunchReque
   const { setActiveDropContext, registerWorldsRefreshCallback, unregisterWorldsRefreshCallback } = useAppDragDropStore();
   const { showModal, hideModal } = useGlobalModal();
   const { profiles: allProfiles, loading: isLoadingProfiles } = useProfileStore();
+  const syncEnabled = useSyncStore((s) => s.status.enabled);
 
   // useProfileLaunch teilt den State ueber den Zustand-Store pro profileId
   // → `isLaunching` hier ist identisch zu dem im Parent (Hero-Play-Button).
@@ -316,6 +319,17 @@ export function WorldsTabV3({ profile, isActive = true, onRefresh, onLaunchReque
     }
   }, [profile.id, loadData, t]);
 
+  const handleOpenRestore = useCallback(() => {
+    const modalId = `restore-worlds-${profile.id}`;
+    showModal(modalId, (
+      <RestoreWorldsModal
+        profileId={profile.id}
+        onClose={() => hideModal(modalId)}
+        onRestored={() => { hideModal(modalId); void loadData(); }}
+      />
+    ));
+  }, [profile.id, showModal, hideModal, loadData]);
+
   const handleBatchDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
     const targets = worlds.filter(w => selectedIds.has(w.folder_name));
@@ -431,6 +445,17 @@ export function WorldsTabV3({ profile, isActive = true, onRefresh, onLaunchReque
         >
           <Icon icon="solar:refresh-bold" className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </button>
+
+        {syncEnabled && (
+          <button
+            onClick={handleOpenRestore}
+            className="h-8 px-3 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-xs font-minecraft uppercase tracking-wider flex items-center gap-1.5"
+            title={t("worlds.restore")}
+          >
+            <Icon icon="solar:history-bold" className="w-4 h-4" />
+            {t("worlds.restore")}
+          </button>
+        )}
 
         <button
           onClick={handleImport}

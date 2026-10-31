@@ -31,6 +31,7 @@ pub mod path_commands;
 pub mod process_command;
 pub mod profile_command;
 pub mod skin_render_command;
+pub mod sync_commands;
 pub mod sync_pack_command;
 pub mod tester_command;
 pub mod twitch_command;

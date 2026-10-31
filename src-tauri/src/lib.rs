@@ -1,6 +1,7 @@
 #[macro_use]
 pub mod utils;
 pub mod cli;
+pub mod cloud_sync;
 pub mod commands;
 pub mod config;
 pub mod error;

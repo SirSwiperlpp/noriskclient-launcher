@@ -182,6 +182,7 @@ async fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_cli::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -235,6 +236,31 @@ async fn main() {
                 )
                 .build(),
         )
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                if window.label() == "main" {
+                    if let Some(manager) = crate::cloud_sync::CloudSyncManager::get() {
+                        if manager.is_running() {
+                            api.prevent_close();
+                            let _ = window.hide();
+                            manager.set_close_requested(true);
+                            manager.notify(
+                                "Cloud Sync",
+                                "Sync is still running. Closing after Sync is done.",
+                            );
+                        }
+                    }
+                }
+            }
+            tauri::WindowEvent::Focused(true) => {
+                if window.label() == "main" {
+                    if let Some(manager) = crate::cloud_sync::CloudSyncManager::get() {
+                        manager.set_close_requested(false);
+                    }
+                }
+            }
+            _ => {}
+        })
         .setup(|app| {
             let app_handle = app.handle().clone();
 
@@ -243,6 +269,8 @@ async fn main() {
             if cli::dispatch_cold_start(&app_handle) {
                 return Ok(());
             }
+
+            crate::cloud_sync::CloudSyncManager::init(std::sync::Arc::new(app_handle.clone()));
 
             // --- Initialize System Tray (Tauri 2.0) ---
             let show_item = MenuItem::with_id(app, "show", "Show NoRisk Launcher", true, None::<&str>)?;
@@ -962,6 +990,13 @@ async fn main() {
             commands::clip_commands::clip_open_editor,
             commands::clip_commands::clip_editor_current,
             commands::clip_commands::clip_editor_close,
+            commands::sync_commands::sync_get_status,
+            commands::sync_commands::sync_is_running,
+            commands::sync_commands::sync_refresh,
+            commands::sync_commands::sync_now,
+            commands::sync_commands::sync_test_connection,
+            commands::sync_commands::sync_list_world_backups,
+            commands::sync_commands::sync_restore_world_backup,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

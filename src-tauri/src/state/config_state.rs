@@ -428,6 +428,12 @@ pub struct LauncherConfig {
     pub clips: ClipConfig,
     #[serde(default)]
     pub log_level: LogLevel,
+    #[serde(default)]
+    pub sync_enabled: bool,
+    #[serde(default)]
+    pub sync_api_url: Option<String>,
+    #[serde(default)]
+    pub sync_api_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -530,6 +536,9 @@ impl Default for LauncherConfig {
             pack_rollout_override: default_pack_rollout_override(),
             clips: ClipConfig::default(),
             log_level: LogLevel::default(),
+            sync_enabled: false,
+            sync_api_url: None,
+            sync_api_key: None,
         }
     }
 }
@@ -891,6 +900,9 @@ impl ConfigManager {
                         clips
                     },
                     log_level: new_config.log_level,
+                    sync_enabled: new_config.sync_enabled,
+                    sync_api_url: new_config.sync_api_url.clone(),
+                    sync_api_key: new_config.sync_api_key.clone(),
                 };
 
                 true

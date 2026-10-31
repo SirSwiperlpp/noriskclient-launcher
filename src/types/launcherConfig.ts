@@ -168,6 +168,9 @@ export interface LauncherConfig {
   pack_rollout_override: "auto" | "off" | "on";
   clips: ClipConfig;
   log_level: LogLevel;
+  sync_enabled: boolean;
+  sync_api_url: string | null;
+  sync_api_key: string | null;
 }
 
 export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";

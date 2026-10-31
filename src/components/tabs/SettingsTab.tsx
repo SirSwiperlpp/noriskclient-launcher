@@ -19,6 +19,7 @@ import { GeneralTab } from "./settings/GeneralTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { AdvancedTab } from "./settings/AdvancedTab";
 import { ClipsTab } from "./settings/ClipsTab";
+import { SyncTab } from "./settings/SyncTab";
 import { SettingsConfigProvider } from "./settings/settings-context";
 import { useTranslation } from "react-i18next";
 import { setDiscordState } from "../../utils/discordRpc";
@@ -26,12 +27,13 @@ import { parseErrorMessage } from "../../utils/error-utils";
 import { useClipSettingsSync } from "../../hooks/useClipSettingsSync";
 import { isMacOS, supportsClips } from "../../utils/platform";
 
-type SettingsTabId = "general" | "appearance" | "clips" | "advanced" | "debug";
+type SettingsTabId = "general" | "appearance" | "clips" | "sync" | "advanced" | "debug";
 
 const SETTINGS_TAB_IDS: SettingsTabId[] = [
   "general",
   "appearance",
   "clips",
+  "sync",
   "advanced",
   "debug",
 ];
@@ -101,6 +103,10 @@ export function SettingsTab({ onClose }: SettingsTabProps) {
           { id: "clips-storage", label: t("settings.clips.storage.title") },
         ]
       : [],
+    sync: [
+      { id: "sync", label: t("settings.sync.section") },
+      { id: "sync-server", label: t("settings.sync.server_section") },
+    ],
     advanced: [
       { id: "login_cache", label: t("settings.sections.login_cache") },
       { id: "gamedir", label: t("settings.game_data_dir.title") },
@@ -121,6 +127,7 @@ export function SettingsTab({ onClose }: SettingsTabProps) {
     ...(supportsClips()
       ? [{ id: "clips" as const, label: t("settings.tabs.clips"), icon: "solar:videocamera-record-bold", children: sectionDefs.clips }]
       : []),
+    { id: "sync", label: t("settings.tabs.sync"), icon: "solar:cloud-bold", children: sectionDefs.sync },
     { id: "advanced", label: t("settings.tabs.advanced"), icon: "solar:tuning-bold", children: sectionDefs.advanced },
     { id: "debug", label: t("settings.tabs.debug"), icon: "solar:bug-bold", children: sectionDefs.debug },
   ];
@@ -312,11 +319,12 @@ export function SettingsTab({ onClose }: SettingsTabProps) {
       general: <GeneralTab />,
       appearance: <AppearanceTab />,
       clips: <ClipsTab />,
+      sync: <SyncTab />,
       advanced: <AdvancedTab />,
     };
 
     if (sidebarQuery && !onlyTab) {
-      const order: SettingsTabId[] = ["general", "appearance", "advanced"];
+      const order: SettingsTabId[] = ["general", "appearance", "sync", "advanced"];
       const ordered = [activeTab, ...order.filter((id) => id !== activeTab)].filter(
         (id) => bodyOf[id],
       ) as SettingsTabId[];
