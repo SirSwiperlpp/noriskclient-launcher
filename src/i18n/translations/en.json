@@ -45,6 +45,7 @@
   "sync.dropdown.last_synced": "Last synced {{time}}",
   "sync.dropdown.never": "Never synced",
   "sync.dropdown.idle": "Up to date",
+  "sync.dropdown.working": "Working…",
   "sync.dropdown.sync_now": "Sync now",
   "sync.dropdown.storage_full": "Server storage is full. Sync paused.",
   "sync.dropdown.error": "Sync failed",

@@ -2,17 +2,22 @@ use super::client::{RemoteEntry, RemoteWorldBackup, SyncClient, WriteResult};
 use super::{now_ms, CloudSyncManager, SyncDirection, SyncFailure, SyncFileActivity, SyncReport};
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use tokio::fs;
+use tokio::sync::{Mutex, Semaphore};
+use tokio::task::JoinSet;
 use uuid::Uuid;
 
 const SYNC_DIR_ROOTS: [&str; 5] = ["saves", "mods", "resourcepacks", "shaderpacks", "config"];
 const SYNC_FILE_ROOTS: [&str; 2] = ["options.txt", "servers.dat"];
 const LOCAL_BACKUP_RETENTION_MS: i64 = 14 * 24 * 60 * 60 * 1000;
+const UPLOAD_CONCURRENCY: usize = 8;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SyncConnectionResult {
@@ -28,6 +33,19 @@ struct LocalEntry {
     mtime: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CacheEntry {
+    mtime: i64,
+    size: u64,
+    hash: String,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct HashCache {
+    #[serde(default)]
+    files: HashMap<String, CacheEntry>,
+}
+
 struct PlanItem {
     rel: String,
     direction: SyncDirection,
@@ -39,6 +57,12 @@ struct ProfilePlan {
     instance_dir: PathBuf,
     local: HashMap<String, LocalEntry>,
     items: Vec<PlanItem>,
+}
+
+enum Outcome {
+    Uploaded,
+    Downloaded,
+    Skipped,
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -101,17 +125,45 @@ fn worlds_in(items: &[PlanItem], direction: SyncDirection) -> Vec<String> {
     set.into_iter().collect()
 }
 
-async fn hash_entry(path: &Path, meta: &std::fs::Metadata) -> Result<LocalEntry> {
-    let bytes = fs::read(path).await?;
-    let mut hasher = Sha256::new();
-    hasher.update(&bytes);
-    Ok(LocalEntry {
-        hash: hex_encode(&hasher.finalize()),
-        mtime: mtime_ms(meta),
-    })
+fn hash_cache_root() -> PathBuf {
+    LAUNCHER_DIRECTORY.meta_dir().join("cloud_sync_cache")
 }
 
-async fn walk_dir(root: &Path, prefix: &str, out: &mut HashMap<String, LocalEntry>) -> Result<()> {
+fn hash_cache_path(profile_id: Uuid) -> PathBuf {
+    hash_cache_root().join(format!("{}.json", profile_id))
+}
+
+async fn load_hash_cache(profile_id: Uuid) -> HashMap<String, CacheEntry> {
+    match fs::read(hash_cache_path(profile_id)).await {
+        Ok(bytes) => serde_json::from_slice::<HashCache>(&bytes)
+            .map(|cache| cache.files)
+            .unwrap_or_default(),
+        Err(_) => HashMap::new(),
+    }
+}
+
+async fn save_hash_cache(profile_id: Uuid, files: &HashMap<String, CacheEntry>) {
+    let root = hash_cache_root();
+    if fs::create_dir_all(&root).await.is_err() {
+        return;
+    }
+    let cache = HashCache {
+        files: files.clone(),
+    };
+    if let Ok(json) = serde_json::to_vec(&cache) {
+        let target = hash_cache_path(profile_id);
+        let tmp = root.join(format!(".{}.tmp-{}", profile_id, Uuid::new_v4().simple()));
+        if fs::write(&tmp, &json).await.is_ok() {
+            let _ = fs::rename(&tmp, &target).await;
+        }
+    }
+}
+
+async fn collect_dir(
+    root: &Path,
+    prefix: &str,
+    out: &mut Vec<(String, PathBuf, i64, u64)>,
+) -> Result<()> {
     let mut stack: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), prefix.to_string())];
     while let Some((dir, rel_prefix)) = stack.pop() {
         let mut entries = match fs::read_dir(&dir).await {
@@ -129,33 +181,68 @@ async fn walk_dir(root: &Path, prefix: &str, out: &mut HashMap<String, LocalEntr
             if meta.is_dir() {
                 stack.push((path, rel));
             } else if meta.is_file() {
-                if let Ok(entry) = hash_entry(&path, &meta).await {
-                    out.insert(rel, entry);
-                }
+                out.push((rel, path, mtime_ms(&meta), meta.len()));
             }
         }
     }
     Ok(())
 }
 
-async fn build_local_manifest(instance_dir: &Path) -> Result<HashMap<String, LocalEntry>> {
-    let mut out = HashMap::new();
+async fn collect_files(instance_dir: &Path) -> Result<Vec<(String, PathBuf, i64, u64)>> {
+    let mut out = Vec::new();
     for root in SYNC_DIR_ROOTS {
         let dir = instance_dir.join(root);
         if fs::metadata(&dir).await.map(|m| m.is_dir()).unwrap_or(false) {
-            walk_dir(&dir, root, &mut out).await?;
+            collect_dir(&dir, root, &mut out).await?;
         }
     }
     for file in SYNC_FILE_ROOTS {
         let path = instance_dir.join(file);
         if let Ok(meta) = fs::metadata(&path).await {
             if meta.is_file() {
-                if let Ok(entry) = hash_entry(&path, &meta).await {
-                    out.insert(file.to_string(), entry);
-                }
+                out.push((file.to_string(), path, mtime_ms(&meta), meta.len()));
             }
         }
     }
+    Ok(out)
+}
+
+async fn hash_file(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).await?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    Ok(hex_encode(&hasher.finalize()))
+}
+
+async fn build_local_manifest(
+    profile_id: Uuid,
+    instance_dir: &Path,
+) -> Result<HashMap<String, LocalEntry>> {
+    let files = collect_files(instance_dir).await?;
+    let cache = load_hash_cache(profile_id).await;
+    let mut out = HashMap::new();
+    let mut next_cache: HashMap<String, CacheEntry> = HashMap::new();
+
+    for (rel, abs, mtime, size) in files {
+        let hash = match cache.get(&rel) {
+            Some(entry) if entry.mtime == mtime && entry.size == size => entry.hash.clone(),
+            _ => match hash_file(&abs).await {
+                Ok(hash) => hash,
+                Err(_) => continue,
+            },
+        };
+        next_cache.insert(
+            rel.clone(),
+            CacheEntry {
+                mtime,
+                size,
+                hash: hash.clone(),
+            },
+        );
+        out.insert(rel, LocalEntry { hash, mtime });
+    }
+
+    save_hash_cache(profile_id, &next_cache).await;
     Ok(out)
 }
 
@@ -382,12 +469,43 @@ pub async fn restore_world_backup(profile_id: Uuid, world: &str, backup_id: &str
     Ok(())
 }
 
+async fn transfer_one(
+    client: &SyncClient,
+    plan: &ProfilePlan,
+    item: &PlanItem,
+    profile_id: &str,
+) -> std::result::Result<Outcome, SyncFailure> {
+    match item.direction {
+        SyncDirection::Up => {
+            let abs = resolve(&plan.instance_dir, &item.rel);
+            let bytes = match fs::read(&abs).await {
+                Ok(bytes) => bytes,
+                Err(_) => return Ok(Outcome::Skipped),
+            };
+            let (mtime, hash) = match plan.local.get(&item.rel) {
+                Some(entry) => (entry.mtime, entry.hash.clone()),
+                None => (now_ms(), String::new()),
+            };
+            match client.upload(profile_id, &item.rel, bytes, mtime, &hash).await? {
+                WriteResult::StorageFull => Err(SyncFailure::StorageFull),
+                _ => Ok(Outcome::Uploaded),
+            }
+        }
+        SyncDirection::Down => {
+            let bytes = client.download(profile_id, &item.rel).await?;
+            let abs = resolve(&plan.instance_dir, &item.rel);
+            write_atomic(&abs, &bytes).await?;
+            Ok(Outcome::Downloaded)
+        }
+    }
+}
+
 pub async fn run(
-    manager: &CloudSyncManager,
+    manager: Arc<CloudSyncManager>,
     url: &str,
     key: Option<String>,
 ) -> std::result::Result<SyncReport, SyncFailure> {
-    let client = SyncClient::new(url, key)?;
+    let client = Arc::new(SyncClient::new(url, key)?);
     let state = crate::state::State::get()
         .await
         .map_err(|e| SyncFailure::Other(e.to_string()))?;
@@ -409,7 +527,8 @@ pub async fn run(
             Ok(path) => path,
             Err(_) => continue,
         };
-        let local = build_local_manifest(&instance_dir).await?;
+        manager.emit_scanning(&profile.name).await;
+        let local = build_local_manifest(profile.id, &instance_dir).await?;
         let remote = client.get_manifest(&profile.id.to_string()).await?;
         let items = diff(&local, &remote);
         total += items.len() as u64;
@@ -422,22 +541,36 @@ pub async fn run(
         });
     }
 
-    let mut report = SyncReport {
-        processed: 0,
-        total,
-        uploaded: 0,
-        downloaded: 0,
-    };
-    let mut last_emit: i64 = 0;
+    let processed = Arc::new(AtomicU64::new(0));
+    let uploaded = Arc::new(AtomicU64::new(0));
+    let downloaded = Arc::new(AtomicU64::new(0));
+    let abort = Arc::new(AtomicBool::new(false));
+    let failure: Arc<Mutex<Option<SyncFailure>>> = Arc::new(Mutex::new(None));
+    let semaphore = Arc::new(Semaphore::new(UPLOAD_CONCURRENCY));
 
-    for plan in &plans {
+    for plan in plans {
+        if abort.load(Ordering::SeqCst) {
+            break;
+        }
         let profile_id = plan.id.to_string();
 
         for world in worlds_in(&plan.items, SyncDirection::Up) {
-            match client.backup_world(&profile_id, &world).await? {
-                WriteResult::StorageFull => return Err(SyncFailure::StorageFull),
-                _ => {}
+            match client.backup_world(&profile_id, &world).await {
+                Ok(WriteResult::StorageFull) => {
+                    abort.store(true, Ordering::SeqCst);
+                    *failure.lock().await = Some(SyncFailure::StorageFull);
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    abort.store(true, Ordering::SeqCst);
+                    *failure.lock().await = Some(SyncFailure::Other(e.to_string()));
+                    break;
+                }
             }
+        }
+        if abort.load(Ordering::SeqCst) {
+            break;
         }
 
         for world in worlds_in(&plan.items, SyncDirection::Down) {
@@ -447,53 +580,83 @@ pub async fn run(
             }
         }
 
-        for item in &plan.items {
-            let now = now_ms();
-            if now - last_emit > 150 {
-                manager
-                    .emit_running(
-                        &report,
-                        Some(SyncFileActivity {
-                            profile_id: profile_id.clone(),
-                            profile_name: plan.name.clone(),
-                            path: item.rel.clone(),
-                            direction: item.direction,
-                        }),
-                    )
-                    .await;
-                last_emit = now;
-            }
+        let plan = Arc::new(plan);
+        let count = plan.items.len();
+        let mut set: JoinSet<()> = JoinSet::new();
 
-            match item.direction {
-                SyncDirection::Up => {
-                    let abs = resolve(&plan.instance_dir, &item.rel);
-                    let bytes = match fs::read(&abs).await {
-                        Ok(bytes) => bytes,
-                        Err(_) => {
-                            report.processed += 1;
-                            continue;
+        for idx in 0..count {
+            if abort.load(Ordering::SeqCst) {
+                break;
+            }
+            let permit = match semaphore.clone().acquire_owned().await {
+                Ok(permit) => permit,
+                Err(_) => break,
+            };
+            let client = client.clone();
+            let manager = manager.clone();
+            let plan = plan.clone();
+            let processed = processed.clone();
+            let uploaded = uploaded.clone();
+            let downloaded = downloaded.clone();
+            let abort = abort.clone();
+            let failure = failure.clone();
+            let profile_id = profile_id.clone();
+
+            set.spawn(async move {
+                let _permit = permit;
+                if abort.load(Ordering::SeqCst) {
+                    return;
+                }
+                let item = &plan.items[idx];
+                let activity = SyncFileActivity {
+                    profile_id: profile_id.clone(),
+                    profile_name: plan.name.clone(),
+                    path: item.rel.clone(),
+                    direction: item.direction,
+                };
+                match transfer_one(&client, &plan, item, &profile_id).await {
+                    Ok(Outcome::Uploaded) => {
+                        uploaded.fetch_add(1, Ordering::SeqCst);
+                    }
+                    Ok(Outcome::Downloaded) => {
+                        downloaded.fetch_add(1, Ordering::SeqCst);
+                    }
+                    Ok(Outcome::Skipped) => {}
+                    Err(f) => {
+                        abort.store(true, Ordering::SeqCst);
+                        let mut guard = failure.lock().await;
+                        if guard.is_none() {
+                            *guard = Some(f);
                         }
-                    };
-                    let (mtime, hash) = match plan.local.get(&item.rel) {
-                        Some(entry) => (entry.mtime, entry.hash.clone()),
-                        None => (now_ms(), String::new()),
-                    };
-                    match client.upload(&profile_id, &item.rel, bytes, mtime, &hash).await? {
-                        WriteResult::StorageFull => return Err(SyncFailure::StorageFull),
-                        WriteResult::Written => report.uploaded += 1,
-                        WriteResult::Missing => {}
                     }
                 }
-                SyncDirection::Down => {
-                    let bytes = client.download(&profile_id, &item.rel).await?;
-                    let abs = resolve(&plan.instance_dir, &item.rel);
-                    write_atomic(&abs, &bytes).await?;
-                    report.downloaded += 1;
-                }
-            }
-            report.processed += 1;
+                let done = processed.fetch_add(1, Ordering::SeqCst) + 1;
+                manager
+                    .emit_progress(
+                        done,
+                        total,
+                        uploaded.load(Ordering::SeqCst),
+                        downloaded.load(Ordering::SeqCst),
+                        Some(activity),
+                    )
+                    .await;
+            });
+        }
+
+        while set.join_next().await.is_some() {}
+        if abort.load(Ordering::SeqCst) {
+            break;
         }
     }
 
-    Ok(report)
+    if let Some(failure) = failure.lock().await.take() {
+        return Err(failure);
+    }
+
+    Ok(SyncReport {
+        processed: processed.load(Ordering::SeqCst),
+        total,
+        uploaded: uploaded.load(Ordering::SeqCst),
+        downloaded: downloaded.load(Ordering::SeqCst),
+    })
 }

@@ -138,6 +138,11 @@ export function CloudSyncIndicator({ className }: CloudSyncIndicatorProps) {
                 })}
               </div>
             </div>
+          ) : isRunning ? (
+            <div className="flex items-center gap-2 text-sm text-white/70 font-smallcaps">
+              <Icon icon="svg-spinners:ring-resize" className="w-4 h-4" />
+              {status.message ?? t("sync.dropdown.working")}
+            </div>
           ) : (
             <div className="flex items-center gap-2 text-sm text-white/70 font-smallcaps">
               <Icon icon="solar:check-circle-bold" className="w-4 h-4 text-emerald-400" />

@@ -4,7 +4,7 @@ pub mod engine;
 use crate::error::AppError;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
@@ -122,6 +122,7 @@ pub struct CloudSyncManager {
     app: Arc<AppHandle>,
     running: AtomicBool,
     close_requested: AtomicBool,
+    last_progress: AtomicI64,
     status: Mutex<SyncStatus>,
 }
 
@@ -131,6 +132,7 @@ impl CloudSyncManager {
             app,
             running: AtomicBool::new(false),
             close_requested: AtomicBool::new(false),
+            last_progress: AtomicI64::new(0),
             status: Mutex::new(SyncStatus::disabled()),
         });
         let _ = CLOUD_SYNC.set(manager.clone());
@@ -229,6 +231,55 @@ impl CloudSyncManager {
         self.set_status(status).await;
     }
 
+    pub async fn emit_progress(
+        &self,
+        processed: u64,
+        total: u64,
+        uploaded: u64,
+        downloaded: u64,
+        current: Option<SyncFileActivity>,
+    ) {
+        let now = now_ms();
+        let last = self.last_progress.load(Ordering::Relaxed);
+        if processed < total && now - last < 120 {
+            return;
+        }
+        self.last_progress.store(now, Ordering::Relaxed);
+        let status = SyncStatus {
+            enabled: true,
+            phase: SyncPhase::Running,
+            running: true,
+            message: None,
+            error: None,
+            storage_full: false,
+            processed,
+            total,
+            uploaded,
+            downloaded,
+            current,
+            last_synced_ms: self.status.lock().await.last_synced_ms,
+        };
+        self.set_status(status).await;
+    }
+
+    pub async fn emit_scanning(&self, profile_name: &str) {
+        let status = SyncStatus {
+            enabled: true,
+            phase: SyncPhase::Running,
+            running: true,
+            message: Some(format!("Checking {}", profile_name)),
+            error: None,
+            storage_full: false,
+            processed: 0,
+            total: 0,
+            uploaded: 0,
+            downloaded: 0,
+            current: None,
+            last_synced_ms: self.status.lock().await.last_synced_ms,
+        };
+        self.set_status(status).await;
+    }
+
     pub fn trigger(self: &Arc<Self>, reason: &str) {
         let manager = self.clone();
         let reason = reason.to_string();
@@ -261,7 +312,7 @@ impl CloudSyncManager {
         let last = self.status.lock().await.last_synced_ms;
         self.emit_running(&SyncReport::default(), None).await;
 
-        let result = engine::run(&**self, &url, key).await;
+        let result = engine::run(self.clone(), &url, key).await;
         self.running.store(false, Ordering::SeqCst);
 
         match result {
