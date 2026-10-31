@@ -117,6 +117,15 @@ pub fn now_ms() -> i64 {
 }
 
 static CLOUD_SYNC: OnceCell<Arc<CloudSyncManager>> = OnceCell::new();
+static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(true);
+
+pub fn set_close_to_tray(value: bool) {
+    CLOSE_TO_TRAY.store(value, Ordering::SeqCst);
+}
+
+pub fn close_to_tray() -> bool {
+    CLOSE_TO_TRAY.load(Ordering::SeqCst)
+}
 
 pub struct CloudSyncManager {
     app: Arc<AppHandle>,

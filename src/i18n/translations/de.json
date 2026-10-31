@@ -14,6 +14,8 @@
   "settings.tabs.advanced": "Erweitert",
   "settings.tabs.debug": "Debug",
   "settings.tabs.sync": "Sync",
+  "settings.close_to_tray": "In Tray schließen",
+  "settings.close_to_tray.tooltip": "Beim Schließen des Fensters läuft der Launcher im System-Tray weiter, statt sich zu beenden.",
   "settings.sync.section": "Cloud Sync",
   "settings.sync.enable": "Cloud Sync aktivieren",
   "settings.sync.enable.tooltip": "Alle Profile (Welten, Mods, Resource- & Shader-Packs, Config) mit deinem eigenen Server synchronisieren.",

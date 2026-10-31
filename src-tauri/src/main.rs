@@ -239,7 +239,10 @@ async fn main() {
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 if window.label() == "main" {
-                    if let Some(manager) = crate::cloud_sync::CloudSyncManager::get() {
+                    if crate::cloud_sync::close_to_tray() {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else if let Some(manager) = crate::cloud_sync::CloudSyncManager::get() {
                         if manager.is_running() {
                             api.prevent_close();
                             let _ = window.hide();

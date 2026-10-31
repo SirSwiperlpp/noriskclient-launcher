@@ -434,6 +434,8 @@ pub struct LauncherConfig {
     pub sync_api_url: Option<String>,
     #[serde(default)]
     pub sync_api_key: Option<String>,
+    #[serde(default = "default_true_bool")]
+    pub close_to_tray: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -539,6 +541,7 @@ impl Default for LauncherConfig {
             sync_enabled: false,
             sync_api_url: None,
             sync_api_key: None,
+            close_to_tray: true,
         }
     }
 }
@@ -903,6 +906,7 @@ impl ConfigManager {
                     sync_enabled: new_config.sync_enabled,
                     sync_api_url: new_config.sync_api_url.clone(),
                     sync_api_key: new_config.sync_api_key.clone(),
+                    close_to_tray: new_config.close_to_tray,
                 };
 
                 true
@@ -930,6 +934,8 @@ impl ConfigManager {
             }
         }
 
+        crate::cloud_sync::set_close_to_tray(new_config.close_to_tray);
+
         Ok(())
     }
 }
@@ -940,6 +946,7 @@ impl PostInitializationHandler for ConfigManager {
         trace!("ConfigManager: on_state_ready called. Loading configuration...");
         self.load_config_internal().await?;
         apply_log_level(self.config.read().await.log_level);
+        crate::cloud_sync::set_close_to_tray(self.config.read().await.close_to_tray);
         trace!("ConfigManager: Successfully loaded configuration in on_state_ready.");
         Ok(())
     }

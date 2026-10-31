@@ -237,6 +237,19 @@ export function GeneralTab() {
           />
         </SettingRow>
         <SettingRow
+          label={t("settings.close_to_tray")}
+          description={t("settings.close_to_tray.tooltip")}
+          searchKeywords={kw("settings.close_to_tray", "tray", "close", "schließen", "minimize", "background", "hintergrund")}
+          disabled={saving}
+        >
+          <ToggleSwitch
+            checked={tempConfig?.close_to_tray ?? true}
+            onChange={(checked) => tempConfig && setTempConfig({ ...tempConfig, close_to_tray: checked })}
+            disabled={saving}
+            size="md"
+          />
+        </SettingRow>
+        <SettingRow
           label={t("analytics.settings.label")}
           description={t("analytics.settings.tooltip")}
           searchKeywords={kw("analytics.settings.label", "analytics", "analyse", "telemetry", "telemetrie", "tracking")}

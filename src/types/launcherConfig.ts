@@ -171,6 +171,7 @@ export interface LauncherConfig {
   sync_enabled: boolean;
   sync_api_url: string | null;
   sync_api_key: string | null;
+  close_to_tray: boolean;
 }
 
 export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
