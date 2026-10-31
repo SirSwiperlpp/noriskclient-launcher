@@ -436,7 +436,7 @@ pub async fn run(
         for world in worlds_in(&plan.items, SyncDirection::Up) {
             match client.backup_world(&profile_id, &world).await? {
                 WriteResult::StorageFull => return Err(SyncFailure::StorageFull),
-                WriteResult::Written => {}
+                _ => {}
             }
         }
 
@@ -481,6 +481,7 @@ pub async fn run(
                     match client.upload(&profile_id, &item.rel, bytes, mtime, &hash).await? {
                         WriteResult::StorageFull => return Err(SyncFailure::StorageFull),
                         WriteResult::Written => report.uploaded += 1,
+                        WriteResult::Missing => {}
                     }
                 }
                 SyncDirection::Down => {

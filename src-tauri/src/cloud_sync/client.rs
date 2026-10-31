@@ -13,6 +13,7 @@ pub struct SyncClient {
 pub enum WriteResult {
     Written,
     StorageFull,
+    Missing,
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,6 +186,9 @@ impl SyncClient {
             .await?;
         if resp.status().as_u16() == 507 {
             return Ok(WriteResult::StorageFull);
+        }
+        if resp.status().as_u16() == 404 {
+            return Ok(WriteResult::Missing);
         }
         if !resp.status().is_success() {
             return Err(AppError::Other(format!(
