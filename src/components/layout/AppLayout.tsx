@@ -207,9 +207,21 @@ export function AppLayout({
           }
 
           if (closeRef.current) {
-            closeRef.current.addEventListener("click", () =>
-              closeClipEditorThen(() => exit(0)).catch(() => exit(0)),
-            );
+            closeRef.current.addEventListener("click", async () => {
+              let toTray = true;
+              try {
+                toTray = (await ConfigService.getLauncherConfig()).close_to_tray;
+              } catch {
+                toTray = true;
+              }
+              if (toTray) {
+                try {
+                  await currentWindow.hide();
+                } catch {}
+              } else {
+                closeClipEditorThen(() => exit(0)).catch(() => exit(0));
+              }
+            });
           }
         } else {
           console.log(

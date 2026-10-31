@@ -218,6 +218,8 @@ pub async fn launch_profile(
         migration_info.is_some()
     );
 
+    crate::cloud_sync::cancel_profile_sync(id);
+
     let state = State::get().await?;
 
     // Try to get the regular profile
@@ -2714,6 +2716,7 @@ pub async fn launch_profile_with_overrides(
 ) -> Result<(), CommandError> {
     let state = State::get().await?;
     let mut profile = resolve_profile_ref(&state, &profile_ref).await?;
+    crate::cloud_sync::cancel_profile_sync(profile.id);
     let jvm_args = jvm_args.unwrap_or_default();
     apply_overrides(&mut profile, overrides)?;
 

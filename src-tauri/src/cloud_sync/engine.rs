@@ -505,6 +505,7 @@ pub async fn run(
     url: &str,
     key: Option<String>,
 ) -> std::result::Result<SyncReport, SyncFailure> {
+    super::clear_cancelled_profiles();
     let client = Arc::new(SyncClient::new(url, key)?);
     let state = crate::state::State::get()
         .await
@@ -527,6 +528,9 @@ pub async fn run(
             Ok(path) => path,
             Err(_) => continue,
         };
+        if super::is_profile_cancelled(&profile.id) {
+            continue;
+        }
         manager.emit_scanning(&profile.name).await;
         let local = build_local_manifest(profile.id, &instance_dir).await?;
         let remote = client.get_manifest(&profile.id.to_string()).await?;
@@ -551,6 +555,9 @@ pub async fn run(
     for plan in plans {
         if abort.load(Ordering::SeqCst) {
             break;
+        }
+        if super::is_profile_cancelled(&plan.id) {
+            continue;
         }
         let profile_id = plan.id.to_string();
 
@@ -604,7 +611,7 @@ pub async fn run(
 
             set.spawn(async move {
                 let _permit = permit;
-                if abort.load(Ordering::SeqCst) {
+                if abort.load(Ordering::SeqCst) || super::is_profile_cancelled(&plan.id) {
                     return;
                 }
                 let item = &plan.items[idx];

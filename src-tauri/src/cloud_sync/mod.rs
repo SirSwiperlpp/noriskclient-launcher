@@ -2,7 +2,8 @@ pub mod client;
 pub mod engine;
 
 use crate::error::AppError;
-use once_cell::sync::OnceCell;
+use dashmap::DashSet;
+use once_cell::sync::{Lazy, OnceCell};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 pub const SYNC_STATUS_EVENT: &str = "cloud_sync_status";
 
@@ -118,6 +120,7 @@ pub fn now_ms() -> i64 {
 
 static CLOUD_SYNC: OnceCell<Arc<CloudSyncManager>> = OnceCell::new();
 static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(true);
+static CANCELLED_PROFILES: Lazy<DashSet<Uuid>> = Lazy::new(DashSet::new);
 
 pub fn set_close_to_tray(value: bool) {
     CLOSE_TO_TRAY.store(value, Ordering::SeqCst);
@@ -125,6 +128,18 @@ pub fn set_close_to_tray(value: bool) {
 
 pub fn close_to_tray() -> bool {
     CLOSE_TO_TRAY.load(Ordering::SeqCst)
+}
+
+pub fn cancel_profile_sync(profile_id: Uuid) {
+    CANCELLED_PROFILES.insert(profile_id);
+}
+
+pub fn is_profile_cancelled(profile_id: &Uuid) -> bool {
+    CANCELLED_PROFILES.contains(profile_id)
+}
+
+pub fn clear_cancelled_profiles() {
+    CANCELLED_PROFILES.clear();
 }
 
 pub struct CloudSyncManager {
