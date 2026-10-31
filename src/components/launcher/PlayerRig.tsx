@@ -82,9 +82,17 @@ export function PlayerRig({ playerName, outline }: PlayerRigProps) {
   const selectedIcon = useSelectedIcon(activeAccount?.id);
   const idleEmote = useIdleEmote();
   const wants3d = useQualitySettingsStore((s) => s.cosmeticRenderer3d);
+  const qualityLevel = useQualitySettingsStore((s) => s.qualityLevel);
   const webglOk = isWebGLAvailable();
   const animated = wants3d && webglOk;
   const isWindowFocused = useWindowFocus();
+
+  // WebKitGTK's WebGL (notably NVIDIA + Wayland on Linux) is far heavier than
+  // Chromium's, so a 60fps rig loop can lag the whole Play screen. Drive the
+  // loop rate and pixel ratio from the quality setting: the default (medium)
+  // is a much lighter 30fps/1x, "low" lighter still, "high" keeps the old look.
+  const rigFps = qualityLevel === "high" ? 60 : qualityLevel === "low" ? 20 : 30;
+  const rigMaxDpr = qualityLevel === "high" ? 1.5 : 1;
   const hasAccount = !!activeAccount;
   const loading = useMinLoading(
     hasAccount && (skinLoading || cosmeticsLoading),
@@ -165,8 +173,8 @@ export function PlayerRig({ playerName, outline }: PlayerRigProps) {
           nametag={rigNametag}
           loading={loading}
           paused={!isWindowFocused}
-          fps={60}
-          maxDpr={1.5}
+          fps={rigFps}
+          maxDpr={rigMaxDpr}
           skeletonColor={accentColor.value}
           className="bg-transparent"
           style={canvasStyle}

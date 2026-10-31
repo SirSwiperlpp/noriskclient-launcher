@@ -154,8 +154,24 @@ use commands::friends_command::{
 
 #[tokio::main]
 async fn main() {
+    // Linux (especially NVIDIA + Wayland) workarounds for WebKitGTK rendering.
+    // These must be set before GTK/WebKit initializes, i.e. before the Tauri
+    // builder runs.
     #[cfg(target_os = "linux")]
-    std::env::set_var("__NV_DISABLE_EXPLICIT_SYNC", "1");
+    {
+        // NVIDIA explicit-sync breaks WebKitGTK's compositor on Wayland;
+        // disabling it avoids stalls/freezes.
+        std::env::set_var("__NV_DISABLE_EXPLICIT_SYNC", "1");
+
+        // WebKitGTK's DMABUF renderer is broken on many setups — most notably
+        // the NVIDIA proprietary driver under Wayland — and causes severe lag
+        // plus missing/blank UI (e.g. the Play button not painting). Falling
+        // back to the non-DMABUF path fixes both while keeping WebGL working.
+        // Respect an existing value so users can still opt back in for debugging.
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
 
     if let Err(e) = logging::setup_logging().await {
         eprintln!("FEHLER: Logging konnte nicht initialisiert werden: {}", e);
