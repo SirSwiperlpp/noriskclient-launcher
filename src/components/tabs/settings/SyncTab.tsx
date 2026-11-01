@@ -9,6 +9,7 @@ import { ToggleSwitch } from "../../ui/ToggleSwitch";
 import { SettingsSection } from "../../ui/settings/SettingsSection";
 import { SettingRow } from "../../ui/settings/SettingRow";
 import { useSettingsConfig, useSettingsKeywords } from "./settings-context";
+import { useThemeStore } from "../../../store/useThemeStore";
 import {
   testSyncConnection,
   refreshSync,
@@ -25,6 +26,7 @@ export function SyncTab() {
   const kw = useSettingsKeywords();
   const { config, tempConfig, setTempConfig, saving } = useSettingsConfig();
   const status = useSyncStore((s) => s.status);
+  const accentColor = useThemeStore((s) => s.accentColor);
   const { confirm, confirmDialog } = useConfirmDialog();
 
   const [testing, setTesting] = useState(false);
@@ -214,6 +216,50 @@ export function SyncTab() {
                 </span>
               )}
             </div>
+
+            {status.running && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between gap-2 text-xs font-minecraft text-white/60">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    {status.current ? (
+                      <>
+                        <Icon
+                          icon={
+                            status.current.direction === "up"
+                              ? "solar:upload-minimalistic-bold"
+                              : "solar:download-minimalistic-bold"
+                          }
+                          className="w-3.5 h-3.5 flex-shrink-0"
+                        />
+                        <span className="truncate">{status.current.path}</span>
+                      </>
+                    ) : (
+                      <span className="truncate">
+                        {status.message ?? t("sync.dropdown.working")}
+                      </span>
+                    )}
+                  </span>
+                  {status.total > 0 && (
+                    <span className="tabular-nums flex-shrink-0">
+                      {status.processed}/{status.total}
+                    </span>
+                  )}
+                </div>
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-200"
+                    style={{
+                      width:
+                        status.total > 0
+                          ? `${Math.round((status.processed / status.total) * 100)}%`
+                          : "100%",
+                      backgroundColor: accentColor.value,
+                      opacity: status.total > 0 ? 1 : 0.4,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 p-4 rounded-lg border border-[#ffffff20] bg-black/10">
               <div className="flex items-start gap-3">
