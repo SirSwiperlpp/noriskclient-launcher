@@ -68,6 +68,19 @@ struct WorldBackupsDto {
     backups: Vec<RemoteWorldBackup>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RemoteProfileMeta {
+    pub id: String,
+    #[serde(default)]
+    pub meta: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProfileMetasDto {
+    #[serde(default)]
+    profiles: Vec<RemoteProfileMeta>,
+}
+
 impl SyncClient {
     pub fn new(url: &str, key: Option<String>) -> Result<Self> {
         let base = url.trim().trim_end_matches('/').to_string();
@@ -291,5 +304,33 @@ impl SyncClient {
             )));
         }
         Ok(resp.bytes().await?.to_vec())
+    }
+
+    pub async fn list_profile_metas(&self) -> Result<Vec<RemoteProfileMeta>> {
+        let url = format!("{}/profiles", self.base);
+        let resp = self.auth(self.http.get(url)).send().await?;
+        if !resp.status().is_success() {
+            return Err(AppError::Other(format!(
+                "Listing profiles failed: {}",
+                resp.status()
+            )));
+        }
+        Ok(resp.json::<ProfileMetasDto>().await?.profiles)
+    }
+
+    pub async fn upload_profile_meta(
+        &self,
+        profile_id: &str,
+        meta: serde_json::Value,
+    ) -> Result<()> {
+        let url = format!("{}/profiles/{}/meta", self.base, profile_id);
+        let resp = self.auth(self.http.put(url).json(&meta)).send().await?;
+        if !resp.status().is_success() {
+            return Err(AppError::Other(format!(
+                "Upload profile meta failed: {}",
+                resp.status()
+            )));
+        }
+        Ok(())
     }
 }

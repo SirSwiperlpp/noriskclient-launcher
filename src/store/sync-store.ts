@@ -7,6 +7,7 @@ import {
   type SyncStatus,
 } from "../services/sync-service";
 import { getRunningProcesses } from "../services/process-service";
+import { useProfileStore } from "./profile-store";
 
 const DEFAULT_STATUS: SyncStatus = {
   enabled: false,
@@ -49,7 +50,11 @@ export const useSyncStore = create<SyncStoreState>((set, get) => ({
     if (!unlisten) {
       try {
         unlisten = await listen<SyncStatus>(SYNC_STATUS_EVENT, (event) => {
+          const previousPhase = get().status.phase;
           set({ status: event.payload });
+          if (event.payload.phase === "done" && previousPhase !== "done") {
+            void useProfileStore.getState().fetchProfiles().catch(() => undefined);
+          }
         });
       } catch (err) {
         console.error("[sync] failed to subscribe to status events:", err);

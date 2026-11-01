@@ -524,6 +524,53 @@ async fn transfer_one(
     }
 }
 
+async fn sync_profile_metadata(
+    state: &crate::state::State,
+    client: &SyncClient,
+    mode: SyncMode,
+) -> Result<()> {
+    let server_metas = client.list_profile_metas().await?;
+    let local = state.profile_manager.list_profiles().await?;
+    let local_ids: HashSet<Uuid> = local.iter().map(|p| p.id).collect();
+
+    if mode == SyncMode::Bidirectional {
+        for profile in &local {
+            if let Ok(value) = serde_json::to_value(profile) {
+                if let Err(e) = client
+                    .upload_profile_meta(&profile.id.to_string(), value)
+                    .await
+                {
+                    log::warn!("[cloud_sync] upload profile meta {} failed: {}", profile.id, e);
+                }
+            }
+        }
+    }
+
+    for remote in server_metas {
+        let id = match Uuid::parse_str(&remote.id) {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        if local_ids.contains(&id) {
+            continue;
+        }
+        match serde_json::from_value::<crate::state::profile_state::Profile>(remote.meta) {
+            Ok(profile) => {
+                if profile.id != id || profile.path.contains("..") {
+                    continue;
+                }
+                if let Err(e) = state.profile_manager.create_profile(profile).await {
+                    log::warn!("[cloud_sync] create profile {} from cloud failed: {}", id, e);
+                }
+            }
+            Err(e) => {
+                log::warn!("[cloud_sync] parse profile meta {} failed: {}", id, e);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub async fn run(
     manager: Arc<CloudSyncManager>,
     url: &str,
@@ -535,6 +582,11 @@ pub async fn run(
     let state = crate::state::State::get()
         .await
         .map_err(|e| SyncFailure::Other(e.to_string()))?;
+
+    if let Err(e) = sync_profile_metadata(&state, &client, mode).await {
+        log::warn!("[cloud_sync] profile metadata sync failed: {}", e);
+    }
+
     let profiles = state
         .profile_manager
         .list_profiles()
