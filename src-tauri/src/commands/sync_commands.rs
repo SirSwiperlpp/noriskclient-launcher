@@ -1,5 +1,5 @@
 use crate::cloud_sync::client::RemoteWorldBackup;
-use crate::cloud_sync::engine::{self, SyncConnectionResult};
+use crate::cloud_sync::engine::{self, RemoteProfileSummary, SyncConnectionResult};
 use crate::cloud_sync::{CloudSyncManager, SyncStatus};
 use crate::error::{AppError, CommandError};
 use std::sync::Arc;
@@ -94,6 +94,50 @@ pub async fn sync_pull_all() -> Result<()> {
     }
 
     manager.trigger_pull_all();
+    Ok(())
+}
+
+#[command]
+pub async fn sync_list_remote_profiles() -> Result<Vec<RemoteProfileSummary>> {
+    Ok(engine::list_remote_profiles().await?)
+}
+
+#[command]
+pub async fn sync_pull_selected(profile_ids: Vec<Uuid>) -> Result<()> {
+    let manager = manager()?;
+    let state = crate::state::State::get().await?;
+    let config = state.config_manager.get_config().await;
+
+    if !config.sync_enabled {
+        return Err(CommandError::from(AppError::Other(
+            "Cloud sync is disabled".to_string(),
+        )));
+    }
+    if config
+        .sync_api_url
+        .as_deref()
+        .map(|url| url.trim().is_empty())
+        .unwrap_or(true)
+    {
+        return Err(CommandError::from(AppError::Other(
+            "Set the sync API URL first".to_string(),
+        )));
+    }
+    if profile_ids.is_empty() {
+        return Err(CommandError::from(AppError::Other(
+            "No profiles selected".to_string(),
+        )));
+    }
+    if manager.is_running() {
+        return Ok(());
+    }
+    if !manager.processes_idle().await {
+        return Err(CommandError::from(AppError::Other(
+            "Close all running instances before syncing".to_string(),
+        )));
+    }
+
+    manager.trigger_pull_selected(profile_ids);
     Ok(())
 }
 

@@ -15,7 +15,10 @@ import {
   refreshSync,
   syncNow,
   pullAllProfiles,
+  listRemoteProfiles,
+  pullSelectedProfiles,
   type SyncConnectionResult,
+  type RemoteProfileSummary,
 } from "../../../services/sync-service";
 import { useSyncStore } from "../../../store/sync-store";
 import { parseErrorMessage } from "../../../utils/error-utils";
@@ -31,6 +34,10 @@ export function SyncTab() {
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<SyncConnectionResult | null>(null);
+
+  const [remoteProfiles, setRemoteProfiles] = useState<RemoteProfileSummary[] | null>(null);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const enabled = tempConfig?.sync_enabled ?? false;
   const url = tempConfig?.sync_api_url ?? "";
@@ -94,6 +101,62 @@ export function SyncTab() {
     try {
       await pullAllProfiles();
       toast.success(t("settings.sync.pull_all.started"));
+    } catch (err) {
+      toast.error(parseErrorMessage(err));
+    }
+  };
+
+  const handleLoadRemote = async () => {
+    setLoadingRemote(true);
+    try {
+      const profiles = await listRemoteProfiles();
+      setRemoteProfiles(profiles);
+      // Preselect profiles that are not yet on this device — the usual intent.
+      setSelectedIds(new Set(profiles.filter((p) => !p.already_local).map((p) => p.id)));
+    } catch (err) {
+      toast.error(parseErrorMessage(err));
+    } finally {
+      setLoadingRemote(false);
+    }
+  };
+
+  const toggleProfile = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllRemote = () => {
+    setSelectedIds(new Set((remoteProfiles ?? []).map((p) => p.id)));
+  };
+
+  const selectNoneRemote = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handlePullSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      toast.error(t("settings.sync.select.none_selected"));
+      return;
+    }
+    const confirmed = await confirm({
+      title: t("settings.sync.select.download", { count: ids.length }),
+      message: t("settings.sync.select.confirm", { count: ids.length }),
+      confirmText: t("settings.sync.select.download", { count: ids.length }),
+      cancelText: t("common.cancel"),
+      type: "warning",
+    });
+    if (!confirmed) return;
+    try {
+      await pullSelectedProfiles(ids);
+      toast.success(t("settings.sync.select.started"));
     } catch (err) {
       toast.error(parseErrorMessage(err));
     }
@@ -275,7 +338,7 @@ export function SyncTab() {
               </div>
             </div>
 
-            <div className="pt-1">
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <Button
                 variant="secondary"
                 size="sm"
@@ -285,7 +348,125 @@ export function SyncTab() {
               >
                 {t("settings.sync.pull_all.button")}
               </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLoadRemote}
+                disabled={loadingRemote || status.running || saving || !savedEnabled}
+                icon={
+                  <Icon
+                    icon={loadingRemote ? "svg-spinners:ring-resize" : "solar:list-check-bold"}
+                    className="w-5 h-5"
+                  />
+                }
+              >
+                {remoteProfiles
+                  ? t("settings.sync.select.refresh")
+                  : t("settings.sync.select.load")}
+              </Button>
             </div>
+
+            {remoteProfiles && (
+              <div className="mt-2 rounded-lg border border-[#ffffff20] bg-black/10">
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-[#ffffff14]">
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-smallcaps text-white/80">
+                      {t("settings.sync.select.title")}
+                    </h4>
+                    <p className="text-xs text-white/50 font-minecraft truncate">
+                      {t("settings.sync.select.description")}
+                    </p>
+                  </div>
+                  {remoteProfiles.length > 0 && (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={selectAllRemote}
+                        className="text-xs font-minecraft text-white/60 hover:text-white/90 transition-colors"
+                      >
+                        {t("settings.sync.select.select_all")}
+                      </button>
+                      <span className="text-white/20">·</span>
+                      <button
+                        type="button"
+                        onClick={selectNoneRemote}
+                        className="text-xs font-minecraft text-white/60 hover:text-white/90 transition-colors"
+                      >
+                        {t("settings.sync.select.select_none")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {remoteProfiles.length === 0 ? (
+                  <p className="px-4 py-6 text-sm text-white/50 font-minecraft text-center">
+                    {t("settings.sync.select.empty")}
+                  </p>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto p-2 space-y-1">
+                    {remoteProfiles.map((profile) => {
+                      const checked = selectedIds.has(profile.id);
+                      const meta = [
+                        profile.game_version ?? undefined,
+                        profile.loader ?? undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return (
+                        <label
+                          key={profile.id}
+                          className="flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-white/5 transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleProfile(profile.id)}
+                            disabled={status.running}
+                            className="w-4 h-4 flex-shrink-0 accent-current"
+                            style={{ accentColor: accentColor.value }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-minecraft text-white/90 truncate">
+                                {profile.name}
+                              </span>
+                              {profile.group && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-minecraft text-white/60 bg-white/10 flex-shrink-0">
+                                  {profile.group}
+                                </span>
+                              )}
+                              {profile.already_local && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-minecraft text-emerald-300/90 bg-emerald-500/15 flex-shrink-0">
+                                  {t("settings.sync.select.already_local")}
+                                </span>
+                              )}
+                            </div>
+                            {meta && (
+                              <span className="text-xs text-white/45 font-minecraft">{meta}</span>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {remoteProfiles.length > 0 && (
+                  <div className="px-4 py-3 border-t border-[#ffffff14]">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handlePullSelected}
+                      disabled={status.running || saving || selectedIds.size === 0}
+                      icon={<Icon icon="solar:cloud-download-bold" className="w-5 h-5" />}
+                    >
+                      {t("settings.sync.select.download", { count: selectedIds.size })}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {status.storage_full && (
               <div className="p-4 rounded-lg border border-orange-500/30 bg-orange-900/20">

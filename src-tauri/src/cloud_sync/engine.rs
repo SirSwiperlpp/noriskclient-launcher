@@ -29,6 +29,16 @@ pub struct SyncConnectionResult {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteProfileSummary {
+    pub id: String,
+    pub name: String,
+    pub game_version: Option<String>,
+    pub loader: Option<String>,
+    pub group: Option<String>,
+    pub already_local: bool,
+}
+
 #[derive(Debug, Clone)]
 struct LocalEntry {
     hash: String,
@@ -468,6 +478,52 @@ pub async fn test_connection(url: &str, key: Option<String>) -> SyncConnectionRe
     }
 }
 
+pub async fn list_remote_profiles() -> Result<Vec<RemoteProfileSummary>> {
+    let client = client_from_config().await?;
+    let state = crate::state::State::get().await?;
+    let local = state.profile_manager.list_profiles().await?;
+    let local_ids: HashSet<Uuid> = local.iter().map(|p| p.id).collect();
+
+    let metas = client.list_profile_metas().await?;
+    let mut out = Vec::with_capacity(metas.len());
+    for remote in metas {
+        let id = match Uuid::parse_str(&remote.id) {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        let meta = &remote.meta;
+        let name = meta
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| remote.id.clone());
+        let game_version = meta
+            .get("game_version")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let loader = meta
+            .get("loader")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let group = meta
+            .get("group")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string());
+        out.push(RemoteProfileSummary {
+            id: remote.id,
+            name,
+            game_version,
+            loader,
+            group,
+            already_local: local_ids.contains(&id),
+        });
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
 pub async fn list_world_backups(profile_id: Uuid) -> Result<Vec<RemoteWorldBackup>> {
     let client = client_from_config().await?;
     client.list_world_backups(&profile_id.to_string()).await
@@ -528,6 +584,7 @@ async fn sync_profile_metadata(
     state: &crate::state::State,
     client: &SyncClient,
     mode: SyncMode,
+    only: Option<&HashSet<Uuid>>,
 ) -> Result<()> {
     let server_metas = client.list_profile_metas().await?;
     let local = state.profile_manager.list_profiles().await?;
@@ -551,6 +608,11 @@ async fn sync_profile_metadata(
             Ok(id) => id,
             Err(_) => continue,
         };
+        if let Some(only) = only {
+            if !only.contains(&id) {
+                continue;
+            }
+        }
         if local_ids.contains(&id) {
             continue;
         }
@@ -576,6 +638,7 @@ pub async fn run(
     url: &str,
     key: Option<String>,
     mode: SyncMode,
+    only: Option<HashSet<Uuid>>,
 ) -> std::result::Result<SyncReport, SyncFailure> {
     super::clear_cancelled_profiles();
     let client = Arc::new(SyncClient::new(url, key)?);
@@ -583,7 +646,7 @@ pub async fn run(
         .await
         .map_err(|e| SyncFailure::Other(e.to_string()))?;
 
-    if let Err(e) = sync_profile_metadata(&state, &client, mode).await {
+    if let Err(e) = sync_profile_metadata(&state, &client, mode, only.as_ref()).await {
         log::warn!("[cloud_sync] profile metadata sync failed: {}", e);
     }
 
@@ -597,6 +660,11 @@ pub async fn run(
     let mut total: u64 = 0;
 
     for profile in &profiles {
+        if let Some(only) = &only {
+            if !only.contains(&profile.id) {
+                continue;
+            }
+        }
         let instance_dir = match state
             .profile_manager
             .get_profile_instance_path(profile.id)

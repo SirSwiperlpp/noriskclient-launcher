@@ -5,6 +5,7 @@ use crate::error::AppError;
 use dashmap::DashSet;
 use once_cell::sync::{Lazy, OnceCell};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -311,22 +312,32 @@ impl CloudSyncManager {
     }
 
     pub fn trigger(self: &Arc<Self>, reason: &str) {
-        self.spawn_sync(reason, SyncMode::Bidirectional);
+        self.spawn_sync(reason, SyncMode::Bidirectional, None);
     }
 
     pub fn trigger_pull_all(self: &Arc<Self>) {
-        self.spawn_sync("pull_all", SyncMode::PullAll);
+        self.spawn_sync("pull_all", SyncMode::PullAll, None);
     }
 
-    fn spawn_sync(self: &Arc<Self>, reason: &str, mode: SyncMode) {
+    pub fn trigger_pull_selected(self: &Arc<Self>, ids: Vec<Uuid>) {
+        let set: HashSet<Uuid> = ids.into_iter().collect();
+        self.spawn_sync("pull_selected", SyncMode::PullAll, Some(set));
+    }
+
+    fn spawn_sync(self: &Arc<Self>, reason: &str, mode: SyncMode, only: Option<HashSet<Uuid>>) {
         let manager = self.clone();
         let reason = reason.to_string();
         tauri::async_runtime::spawn(async move {
-            manager.run_guarded(&reason, mode).await;
+            manager.run_guarded(&reason, mode, only).await;
         });
     }
 
-    async fn run_guarded(self: &Arc<Self>, reason: &str, mode: SyncMode) {
+    async fn run_guarded(
+        self: &Arc<Self>,
+        reason: &str,
+        mode: SyncMode,
+        only: Option<HashSet<Uuid>>,
+    ) {
         let (enabled, url, key) = match self.config().await {
             Some(values) => values,
             None => return,
@@ -350,7 +361,7 @@ impl CloudSyncManager {
         let last = self.status.lock().await.last_synced_ms;
         self.emit_running(&SyncReport::default(), None).await;
 
-        let result = engine::run(self.clone(), &url, key, mode).await;
+        let result = engine::run(self.clone(), &url, key, mode, only).await;
         self.running.store(false, Ordering::SeqCst);
 
         match result {

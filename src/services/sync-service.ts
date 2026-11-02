@@ -39,6 +39,15 @@ export interface WorldBackupInfo {
   created_at: number;
 }
 
+export interface RemoteProfileSummary {
+  id: string;
+  name: string;
+  game_version: string | null;
+  loader: string | null;
+  group: string | null;
+  already_local: boolean;
+}
+
 export const SYNC_STATUS_EVENT = "cloud_sync_status";
 
 export async function getSyncStatus(): Promise<SyncStatus> {
@@ -55,6 +64,14 @@ export async function syncNow(): Promise<void> {
 
 export async function pullAllProfiles(): Promise<void> {
   await invoke("sync_pull_all");
+}
+
+export async function listRemoteProfiles(): Promise<RemoteProfileSummary[]> {
+  return invoke<RemoteProfileSummary[]>("sync_list_remote_profiles");
+}
+
+export async function pullSelectedProfiles(profileIds: string[]): Promise<void> {
+  await invoke("sync_pull_selected", { profileIds });
 }
 
 export async function refreshSync(): Promise<SyncStatus> {
