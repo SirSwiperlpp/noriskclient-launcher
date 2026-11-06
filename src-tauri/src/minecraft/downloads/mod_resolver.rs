@@ -20,6 +20,19 @@ pub struct TargetMod {
     pub sha1: Option<String>, // Known SHA1 from Modrinth/CurseForge (None for Maven/URL/local)
 }
 
+const SECONDARY_INSTANCE_CONFLICT_MODS: &[&str] = &["xaeros", "distanthorizons", "voxy"];
+
+pub fn is_secondary_instance_conflict_mod(filename: &str) -> bool {
+    let normalized: String = filename
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    SECONDARY_INSTANCE_CONFLICT_MODS
+        .iter()
+        .any(|needle| normalized.contains(*needle))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ModResolutionStatus {
     #[default]

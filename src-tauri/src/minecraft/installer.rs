@@ -142,6 +142,31 @@ pub async fn install_minecraft_version(
         &profile_owned
     };
 
+    let drop_conflict_mods = {
+        let running = state
+            .process_manager
+            .get_process_metadata_by_profile(profile.id)
+            .await;
+        let is_secondary = !running.is_empty();
+        let loader_supported = matches!(
+            modloader_enum,
+            ModLoader::Fabric | ModLoader::Forge | ModLoader::NeoForge
+        );
+        if is_secondary && loader_supported {
+            info!(
+                "[Launch] Secondary instance of profile '{}' detected ({} already running) — excluding single-instance-only mods (Xaero's Minimap/World Map, Distant Horizons, Voxy) from this launch.",
+                profile.name,
+                running.len()
+            );
+        } else if is_secondary {
+            info!(
+                "[Launch] Secondary instance of profile '{}' detected, but loader {:?} does not support per-launch mod exclusion — launching with the full mod set.",
+                profile.name, modloader_enum
+            );
+        }
+        is_secondary && loader_supported
+    };
+
     info!(
         "[Launch] Setting experimental mode: {}",
         is_experimental_mode
@@ -822,7 +847,7 @@ pub async fn install_minecraft_version(
 
     // Call the resolver function using the already loaded config (or None)
     let resolve_start = Instant::now();
-    let (target_mods, mut mod_resolution) = summary_phase!(summary, "resolve", {
+    let (mut target_mods, mut mod_resolution) = summary_phase!(summary, "resolve", {
         crate::minecraft::downloads::mod_resolver::resolve_target_mods(
             profile,
             loaded_norisk_config.as_ref(),
@@ -834,6 +859,22 @@ pub async fn install_minecraft_version(
         )
         .await?
     });
+
+    if drop_conflict_mods {
+        let before = target_mods.len();
+        target_mods.retain(|tm| {
+            !crate::minecraft::downloads::mod_resolver::is_secondary_instance_conflict_mod(
+                &tm.filename,
+            )
+        });
+        let removed = before - target_mods.len();
+        if removed > 0 {
+            info!(
+                "[Launch] Secondary instance: excluded {} conflicting mod(s) from the launch set.",
+                removed
+            );
+        }
+    }
 
     emit_progress_event(
         &state,
@@ -853,9 +894,17 @@ pub async fn install_minecraft_version(
         let instance_path = state
             .profile_manager
             .calculate_instance_path_for_profile(profile)?;
-        let root_mods =
+        let mut root_mods =
             crate::minecraft::downloads::mod_resolver::collect_instance_root_mods(&instance_path)
                 .await;
+        if drop_conflict_mods {
+            root_mods.retain(|p| {
+                !p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(crate::minecraft::downloads::mod_resolver::is_secondary_instance_conflict_mod)
+                    .unwrap_or(false)
+            });
+        }
         if !root_mods.is_empty() {
             info!(
                 "Including {} loose jar(s) from {}/mods for profile '{}'",
